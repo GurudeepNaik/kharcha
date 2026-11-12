@@ -30,6 +30,18 @@ const OK: Row[] = [
   ["something new 75", 7500, "something new", "other"],
   ["recharge 299 - jio", 29900, "recharge - jio", "bills"],
   ["inr 10 tea", 1000, "tea", "food"],
+  // Money in
+  ["salary 50,000", 5000000, "salary", "salary"],
+  ["+2000 from ravi", 200000, "from ravi", "income"],
+  ["+ 1500 gift", 150000, "gift", "income"],
+  ["amazon refund 499", 49900, "amazon refund", "refund"],
+  ["cashback 25 upi", 2500, "cashback", "refund", NOW, "upi"],
+  ["freelance 12k 1/11", 1200000, "freelance", "business", "2026-11-01"],
+  ["rent received 8000", 800000, "rent received", "income"],
+  // Spends that mention money words stay spends
+  ["pay electricity 900", 90000, "pay electricity", "bills"],
+  ["client lunch 600", 60000, "client lunch", "food"],
+  ["loan interest 2000", 200000, "loan interest", "rent"],
 ];
 for (const [input, paise, note, cat, date = NOW, method = null] of OK) {
   const r = P.parseEntry(input, NOW);

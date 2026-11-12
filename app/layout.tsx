@@ -21,6 +21,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   viewportFit: "cover",
+  // Android: the page shrinks above the keyboard, so the docked add box stays visible.
+  interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f6f7f5" },
     { media: "(prefers-color-scheme: dark)", color: "#0c0f0e" },

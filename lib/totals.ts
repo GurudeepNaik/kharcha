@@ -1,4 +1,4 @@
-import type { Category } from "./categories";
+import { isIncomeCategory, type Category } from "./categories";
 import { monthOf } from "./dates";
 import type { Expense } from "./types";
 
@@ -7,6 +7,11 @@ export const sortRows = (rows: Expense[]) =>
   [...rows].sort((a, b) => (a.date === b.date ? b.createdAt.localeCompare(a.createdAt) : b.date.localeCompare(a.date)));
 
 export const sum = (rows: Expense[]) => rows.reduce((s, e) => s + e.amountPaise, 0);
+export const isIncome = (e: Expense) => isIncomeCategory(e.category);
+/** Money out only. */
+export const spends = (rows: Expense[]) => rows.filter(e => !isIncome(e));
+/** Money in only. */
+export const incomes = (rows: Expense[]) => rows.filter(isIncome);
 export const onDay = (rows: Expense[], date: string) => rows.filter(e => e.date === date);
 export const inMonth = (rows: Expense[], month: string) => rows.filter(e => monthOf(e.date) === month);
 
@@ -17,13 +22,14 @@ export function byCategory(rows: Expense[]): { category: Category; paise: number
   return [...m].map(([category, t]) => ({ category, ...t })).sort((a, b) => b.paise - a.paise);
 }
 
-/** Rows grouped by day, newest day first (rows are already sorted). */
+/** Rows grouped by day, newest day first (rows are already sorted). `paise` is what was spent that day. */
 export function byDay(rows: Expense[]): { date: string; rows: Expense[]; paise: number }[] {
   const out: { date: string; rows: Expense[]; paise: number }[] = [];
   for (const e of rows) {
+    const spent = isIncome(e) ? 0 : e.amountPaise;
     const last = out[out.length - 1];
-    if (last && last.date === e.date) { last.rows.push(e); last.paise += e.amountPaise; }
-    else out.push({ date: e.date, rows: [e], paise: e.amountPaise });
+    if (last && last.date === e.date) { last.rows.push(e); last.paise += spent; }
+    else out.push({ date: e.date, rows: [e], paise: spent });
   }
   return out;
 }

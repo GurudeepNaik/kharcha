@@ -8,23 +8,27 @@ import type { Method } from "@/lib/parse";
 import type { Expense } from "@/lib/types";
 import { Sheet, SheetHead } from "./ui";
 
-export function EditSheet({ expense, now, onClose, onSave, onDelete }: {
+type SaveFn = (e: Expense, categoryChanged: boolean, everyMonth: boolean) => Promise<void>;
+
+export function EditSheet({ expense, repeating, now, onClose, onSave, onDelete }: {
   expense: Expense | null;
+  /** This entry's monthly repeat is still on. */
+  repeating: boolean;
   now: string;
   onClose: () => void;
-  onSave: (e: Expense, categoryChanged: boolean) => Promise<void>;
+  onSave: SaveFn;
   onDelete: (e: Expense) => Promise<void>;
 }) {
   return (
-    <Sheet open={!!expense} onClose={onClose} label="Change this spend">
-      {expense && <Form key={expense.id} e={expense} now={now} onClose={onClose} onSave={onSave} onDelete={onDelete} />}
+    <Sheet open={!!expense} onClose={onClose} label="Change this entry">
+      {expense && <Form key={expense.id} e={expense} repeating={repeating} now={now} onClose={onClose} onSave={onSave} onDelete={onDelete} />}
     </Sheet>
   );
 }
 
-function Form({ e, now, onClose, onSave, onDelete }: {
-  e: Expense; now: string; onClose: () => void;
-  onSave: (e: Expense, categoryChanged: boolean) => Promise<void>;
+function Form({ e, repeating, now, onClose, onSave, onDelete }: {
+  e: Expense; repeating: boolean; now: string; onClose: () => void;
+  onSave: SaveFn;
   onDelete: (e: Expense) => Promise<void>;
 }) {
   const [amount, setAmount] = useState(plainAmount(e.amountPaise));
@@ -32,6 +36,7 @@ function Form({ e, now, onClose, onSave, onDelete }: {
   const [category, setCategory] = useState<Category>(e.category);
   const [date, setDate] = useState(e.date);
   const [method, setMethod] = useState<Method | null>(e.method);
+  const [monthly, setMonthly] = useState(repeating);
   const [error, setError] = useState<{ field: "amount" | "date"; text: string } | null>(null);
 
   async function submit(ev: React.FormEvent) {
@@ -39,12 +44,12 @@ function Form({ e, now, onClose, onSave, onDelete }: {
     const a = readRupees(amount);
     if (!a.ok) { setError({ field: "amount", text: a.error }); document.getElementById("edit-amount")?.focus(); return; }
     if (!date || date > now) { setError({ field: "date", text: "Pick today or an earlier date." }); return; }
-    await onSave({ ...e, amountPaise: a.paise, note: note.trim().slice(0, 60), category, date, method, updatedAt: new Date().toISOString() }, category !== e.category);
+    await onSave({ ...e, amountPaise: a.paise, note: note.trim().slice(0, 60), category, date, method, updatedAt: new Date().toISOString() }, category !== e.category, monthly);
   }
 
   return (
     <form onSubmit={submit} noValidate>
-      <SheetHead title="Change this spend" onClose={onClose} />
+      <SheetHead title="Change this entry" onClose={onClose} />
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3">
         <div>
           <label htmlFor="edit-amount" className="mb-1 block text-sm font-medium">Amount (₹)</label>
@@ -65,14 +70,19 @@ function Form({ e, now, onClose, onSave, onDelete }: {
 
       <fieldset className="mt-3">
         <legend className="mb-1.5 text-sm font-medium">Category</legend>
+        {[false, true].map(inc => (
+        <div key={String(inc)} className={inc ? "mt-3" : ""}>
+        <p className="mb-1 text-[13px] text-muted">{inc ? "Money in" : "Spent"}</p>
         <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-4">
-          {CATEGORIES.map(c => (
+          {CATEGORIES.filter(c => c.income === inc).map(c => (
             <label key={c.key} className="press flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-line px-2 text-center text-[14px] font-medium has-checked:border-accent has-checked:bg-accent-soft has-focus-visible:outline-2 has-focus-visible:outline-accent">
               <input type="radio" name="category" value={c.key} checked={category === c.key} onChange={() => setCategory(c.key)} className="sr-only" />
               {c.label}
             </label>
           ))}
         </div>
+        </div>
+        ))}
       </fieldset>
 
       <fieldset className="mt-3">
@@ -86,6 +96,14 @@ function Form({ e, now, onClose, onSave, onDelete }: {
           ))}
         </div>
       </fieldset>
+
+      <label className="mt-4 flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-line px-3 has-checked:border-accent has-checked:bg-accent-soft">
+        <input type="checkbox" checked={monthly} onChange={x => setMonthly(x.target.checked)} className="size-5 accent-[var(--accent)]" />
+        <span className="text-[15px]">
+          <span className="font-medium">Every month</span>
+          <span className="block text-[13px] text-muted">Adds it again on day {Number(date.slice(8)) || "–"} of each month, like rent or salary.</span>
+        </span>
+      </label>
 
       <div className="mt-5 flex gap-2">
         <button type="button" onClick={() => void onDelete(e)} className="press min-h-12 rounded-xl border border-line px-4 font-semibold text-bad">Delete</button>

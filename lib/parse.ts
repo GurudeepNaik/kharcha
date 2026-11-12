@@ -1,5 +1,5 @@
-// Reads one line like "chai 20", "₹1,250 rent", "auto 80 yesterday upi" into a spend.
-import { guessCategory, type Category } from "./categories";
+// Reads one line like "chai 20", "₹1,250 rent", "auto 80 yesterday upi" or "salary 50000" into an entry.
+import { guessCategory, isIncomeCategory, type Category } from "./categories";
 import { addDays, validDate } from "./dates";
 import { MAX_PAISE } from "./money";
 
@@ -39,6 +39,10 @@ export function parseEntry(text: string, now: string, learned: ReadonlyMap<strin
     rest = rest.slice(0, dm.index) + " " + rest.slice(dm.index + dm[0].length);
   }
 
+  // A leading "+" means money in: "+2000 from Ravi".
+  const plus = /^\s*\+/.test(rest);
+  if (plus) rest = rest.replace(/^\s*\+/, " ");
+
   // Paid by: upi / gpay / cash ...
   let method: Method | null = null;
   rest = rest.replace(/(?<![\w])(upi|gpay|phonepe|paytm|bhim|cash|nagad)(?![\w])/gi, (w) => { method ??= METHOD_WORDS[w.toLowerCase()]!; return " "; });
@@ -56,5 +60,7 @@ export function parseEntry(text: string, now: string, learned: ReadonlyMap<strin
   rest = rest.slice(0, a.index) + " " + rest.slice(a.index + a[0].length);
 
   const note = rest.replace(/\s+/g, " ").trim().replace(/^[-:–,.;]+|[-:–,;]+$/g, "").trim().slice(0, 60);
-  return { ok: true, value: { amountPaise: paise, note, date, category: guessCategory(note, learned), method } };
+  let category = guessCategory(note, learned);
+  if (plus && !isIncomeCategory(category)) category = "income";
+  return { ok: true, value: { amountPaise: paise, note, date, category, method } };
 }

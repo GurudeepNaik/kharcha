@@ -2,14 +2,15 @@
 
 // Small shared pieces: the spend row, the toast, the bottom sheet and icons.
 import { useEffect, useRef } from "react";
-import { categoryLabel } from "@/lib/categories";
+import { categoryLabel, isIncomeCategory } from "@/lib/categories";
 import { rupees } from "@/lib/money";
 import type { Expense } from "@/lib/types";
 
 export const methodLabel = (m: Expense["method"]) => (m === "upi" ? "UPI" : m === "cash" ? "Cash" : "");
 
-export function SpendRow({ e, onOpen }: { e: Expense; onOpen: (e: Expense) => void }) {
-  const sub = [categoryLabel(e.category), methodLabel(e.method)].filter(Boolean).join(" · ");
+export function SpendRow({ e, onOpen, repeating = false }: { e: Expense; onOpen: (e: Expense) => void; repeating?: boolean }) {
+  const sub = [categoryLabel(e.category), methodLabel(e.method), repeating ? "Every month" : ""].filter(Boolean).join(" · ");
+  const income = isIncomeCategory(e.category);
   return (
     <li>
       <button type="button" onClick={() => onOpen(e)} data-id={e.id}
@@ -18,7 +19,9 @@ export function SpendRow({ e, onOpen }: { e: Expense; onOpen: (e: Expense) => vo
           <span className="block truncate text-[15px] font-medium">{e.note || categoryLabel(e.category)}</span>
           <span className="block truncate text-[13px] text-muted">{sub}</span>
         </span>
-        <span className="num shrink-0 text-[15px] font-semibold">{rupees(e.amountPaise)}</span>
+        <span className={`num shrink-0 text-[15px] font-semibold ${income ? "text-accent" : ""}`}>
+          {income && <span className="sr-only">Money in </span>}{income ? "+" : ""}{rupees(e.amountPaise)}
+        </span>
       </button>
     </li>
   );
@@ -26,14 +29,14 @@ export function SpendRow({ e, onOpen }: { e: Expense; onOpen: (e: Expense) => vo
 
 export interface ToastMsg { id: number; text: string; undo?: () => void }
 
-export function Toast({ msg, onDone }: { msg: ToastMsg | null; onDone: () => void }) {
+export function Toast({ msg, onDone, lift }: { msg: ToastMsg | null; onDone: () => void; lift: boolean }) {
   useEffect(() => {
     if (!msg) return;
     const t = setTimeout(onDone, msg.undo ? 6000 : 3500);
     return () => clearTimeout(t);
   }, [msg, onDone]);
   return (
-    <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-40 flex justify-center px-4">
+    <div role="status" aria-live="polite" className={`pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 ${lift ? "bottom-[calc(13rem+env(safe-area-inset-bottom))]" : "bottom-[calc(5.25rem+env(safe-area-inset-bottom))]"}`}>
       {msg && (
         <div key={msg.id} className="toast-in pointer-events-auto flex max-w-md items-center gap-3 rounded-2xl bg-fg py-2 ps-4 pe-2 text-[15px] text-bg shadow-lg">
           <span className="min-w-0 flex-1">{msg.text}</span>

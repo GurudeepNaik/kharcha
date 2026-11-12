@@ -1,11 +1,11 @@
 // Backup file, restore (with a preview of what changes) and the spreadsheet export.
-import { isCategory, categoryLabel, type Category } from "./categories";
+import { isCategory, isIncomeCategory, categoryLabel, type Category } from "./categories";
 import { validDate } from "./dates";
 import { MAX_PAISE, plainAmount } from "./money";
-import type { Expense, Settings } from "./types";
+import type { Expense, Repeat, Settings } from "./types";
 
 export const BACKUP_KIND = "expense-tracker-backup";
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2; // 2 added money in and monthly repeats; version 1 files still restore
 export const MAX_BACKUP_BYTES = 20 * 1024 * 1024;
 const MAX_ROWS = 200_000;
 
@@ -15,12 +15,13 @@ export interface Backup {
   exportedAt: string;
   expenses: Expense[];
   learned: { word: string; category: Category }[];
+  repeats: Repeat[];
   settings: Pick<Settings, "monthlyLimitPaise">;
 }
 
-export function makeBackup(expenses: Expense[], learned: Map<string, Category>, settings: Settings, now = new Date()): Backup {
+export function makeBackup(expenses: Expense[], learned: Map<string, Category>, settings: Settings, repeats: Repeat[] = [], now = new Date()): Backup {
   return {
-    kind: BACKUP_KIND, version: BACKUP_VERSION, exportedAt: now.toISOString(), expenses,
+    kind: BACKUP_KIND, version: BACKUP_VERSION, exportedAt: now.toISOString(), expenses, repeats,
     learned: [...learned].map(([word, category]) => ({ word, category })),
     settings: { monthlyLimitPaise: settings.monthlyLimitPaise },
   };
@@ -41,7 +42,23 @@ function validExpense(x: unknown): Expense | null {
   const [y, m, d] = e.date.split("-").map(Number) as [number, number, number];
   if (validDate(y, m, d) !== e.date) return null;
   if (typeof e.createdAt !== "string" || !ISO.test(e.createdAt) || typeof e.updatedAt !== "string" || !ISO.test(e.updatedAt)) return null;
-  return { id: e.id, amountPaise: e.amountPaise, note: e.note, category: e.category, method: e.method, date: e.date, createdAt: e.createdAt, updatedAt: e.updatedAt };
+  if (e.repeatId !== undefined && (typeof e.repeatId !== "string" || !ID.test(e.repeatId))) return null;
+  const out: Expense = { id: e.id, amountPaise: e.amountPaise, note: e.note, category: e.category, method: e.method, date: e.date, createdAt: e.createdAt, updatedAt: e.updatedAt };
+  if (e.repeatId !== undefined) out.repeatId = e.repeatId;
+  return out;
+}
+
+function validRepeat(x: unknown): Repeat | null {
+  if (!x || typeof x !== "object") return null;
+  const r = x as Record<string, unknown>;
+  if (typeof r.id !== "string" || !ID.test(r.id)) return null;
+  if (typeof r.amountPaise !== "number" || !Number.isInteger(r.amountPaise) || r.amountPaise <= 0 || r.amountPaise > MAX_PAISE) return null;
+  if (typeof r.note !== "string" || r.note.length > 60 || !isCategory(r.category)) return null;
+  if (!(r.method === null || r.method === "upi" || r.method === "cash")) return null;
+  if (typeof r.day !== "number" || !Number.isInteger(r.day) || r.day < 1 || r.day > 31) return null;
+  if (typeof r.lastMonth !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(r.lastMonth)) return null;
+  if (typeof r.createdAt !== "string" || !ISO.test(r.createdAt)) return null;
+  return { id: r.id, amountPaise: r.amountPaise, note: r.note, category: r.category, method: r.method, day: r.day, lastMonth: r.lastMonth, createdAt: r.createdAt };
 }
 
 /** Reads a backup file's text. Every row is checked; one bad row rejects the whole file, so nothing half-loads. */
@@ -63,10 +80,15 @@ export function readBackup(text: string): { ok: true; value: Backup } | { ok: fa
     if (!l || typeof l.word !== "string" || l.word.length > 40 || !isCategory(l.category)) return bad;
     learned.push({ word: l.word, category: l.category });
   }
+  const repeats: Repeat[] = [];
+  if (b.repeats !== undefined) {
+    if (!Array.isArray(b.repeats) || b.repeats.length > 1000) return bad;
+    for (const x of b.repeats) { const r = validRepeat(x); if (!r) return bad; repeats.push(r); }
+  }
   const s = (b.settings ?? {}) as Record<string, unknown>;
   const limit = s.monthlyLimitPaise;
   const monthlyLimitPaise = typeof limit === "number" && Number.isInteger(limit) && limit > 0 && limit <= MAX_PAISE ? limit : null;
-  return { ok: true, value: { kind: BACKUP_KIND, version: b.version, exportedAt: String(b.exportedAt ?? ""), expenses, learned, settings: { monthlyLimitPaise } } };
+  return { ok: true, value: { kind: BACKUP_KIND, version: b.version, exportedAt: String(b.exportedAt ?? ""), expenses, learned, repeats, settings: { monthlyLimitPaise } } };
 }
 
 /** What a restore would do: new rows, rows where the backup's copy is newer, and rows already the same or newer here. */
@@ -91,9 +113,9 @@ const cell = (s: string) => {
 
 /** CSV for Excel / Google Sheets. The BOM makes Excel read ₹ and Indian scripts correctly. */
 export function toCsv(rows: Expense[]): string {
-  const lines = ["Date,Amount (₹),Category,Note,Paid by"];
+  const lines = ["Date,Type,Amount (₹),Category,Note,Paid by"];
   for (const e of [...rows].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt))) {
-    lines.push([e.date, plainAmount(e.amountPaise), categoryLabel(e.category), cell(e.note), e.method === "upi" ? "UPI" : e.method === "cash" ? "Cash" : ""].join(","));
+    lines.push([e.date, isIncomeCategory(e.category) ? "Money in" : "Spent", plainAmount(e.amountPaise), categoryLabel(e.category), cell(e.note), e.method === "upi" ? "UPI" : e.method === "cash" ? "Cash" : ""].join(","));
   }
   return "﻿" + lines.join("\r\n") + "\r\n";
 }

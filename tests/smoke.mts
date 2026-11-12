@@ -37,6 +37,12 @@ async function enter(page: Page, line: string) {
   await page.keyboard.press("Backspace");
   await page.type("#entry", line);
 }
+/** Taps a row like a person would: scrolled to the middle of the screen, clear of the add box and bottom bar. */
+async function openRow(page: Page, id: string) {
+  await page.$eval(`button[data-id="${id}"]`, b => b.scrollIntoView({ block: "center" }));
+  await page.click(`button[data-id="${id}"]`);
+  await page.waitForSelector("#edit-amount");
+}
 async function add(page: Page, line: string) {
   await enter(page, line);
   await page.keyboard.press("Enter");
@@ -52,6 +58,8 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(
 const paise = (s: string) => Math.round(Number(s.replace(/[₹,]/g, "")) * 100);
 /** Rows as text with sorted keys and sorted by id, so two copies compare equal only if every field matches. */
 const canon = (rows: Row[]) => JSON.stringify([...rows].sort((a, b) => a.id.localeCompare(b.id)).map(r => Object.fromEntries(Object.entries(r).sort(([a], [b]) => a.localeCompare(b)))));
+const INCOME = new Set(["salary", "business", "refund", "income"]);
+const spent = (rows: Row[]) => rows.filter(r => !INCOME.has(r.category)).reduce((s, r) => s + r.amountPaise, 0);
 const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
 
 // ---------- Adding ----------
@@ -103,8 +111,7 @@ ok("Undo removes the spend just saved", (await dbRows(page)).filter(r => r.note 
 // ---------- Editing ----------
 const chai = (await dbRows(page)).find(r => r.note === "chai")!;
 const todayBeforeEdit = (await dbRows(page)).filter(r => r.date === t).reduce((s, r) => s + r.amountPaise, 0);
-await page.click(`button[data-id="${chai.id}"]`);
-await page.waitForSelector("#edit-amount");
+await openRow(page, chai.id);
 await page.click("#edit-amount", { count: 3 }); await page.keyboard.press("Backspace"); await page.type("#edit-amount", "abc");
 await clickText(page, "Save changes");
 await wait(150);
@@ -115,8 +122,7 @@ await wait(300);
 const chai2 = (await dbRows(page)).find(r => r.id === chai.id)!;
 ok("edit saves ₹25 and bumps updatedAt", chai2.amountPaise === 2500 && chai2.updatedAt > chai.updatedAt);
 ok("Today total follows the edit", paise(await text(page, "[data-testid=today-total]")) === todayBeforeEdit + 500);
-await page.click(`button[data-id="${chai.id}"]`);
-await page.waitForSelector("#edit-amount");
+await openRow(page, chai.id);
 await clickText(page, "Delete");
 await wait(300);
 ok("delete removes it", !(await dbRows(page)).some(r => r.id === chai.id));
@@ -124,16 +130,80 @@ await clickText(page, "Undo");
 await wait(300);
 ok("Undo brings it back unchanged", canon([(await dbRows(page)).find(r => r.id === chai.id)!]) === canon([chai2]));
 
+// ---------- Add box sits within thumb reach ----------
+{
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await wait(300);
+  const r = await page.evaluate(() => {
+    const save = [...document.querySelectorAll("form.dock button")].find(b => b.textContent?.trim() === "Save")!.getBoundingClientRect();
+    const nav = document.querySelector("nav")!.getBoundingClientRect();
+    return { saveTop: save.top, saveBottom: save.bottom, navTop: nav.top, h: innerHeight };
+  });
+  ok("Save button is in the bottom third of the screen", r.saveTop > (r.h * 2) / 3);
+  ok("add box sits just above the bottom bar, not under it", r.saveBottom <= r.navTop);
+}
+
+// ---------- Money in ----------
+const spentTodayBefore = paise(await text(page, "[data-testid=today-total]"));
+await add(page, "salary 50,000");
+rows = await dbRows(page);
+ok("salary saved as Salary", rows.some(r => r.note === "salary" && r.category === "salary" && r.amountPaise === 5000000));
+ok("money in doesn't count as spent today", paise(await text(page, "[data-testid=today-total]")) === spentTodayBefore);
+{
+  const m = rows.filter(r => r.date.slice(0, 7) === t.slice(0, 7));
+  const inn = m.filter(r => INCOME.has(r.category)).reduce((s, r) => s + r.amountPaise, 0);
+  ok("Home shows money in", (await text(page, "[data-testid=money-in]")).includes(`+₹${(inn / 100).toLocaleString("en-IN")}`));
+  ok("Home shows what's left (in − spent)", paise(await text(page, "[data-testid=left]")) === Math.abs(inn - spent(m)));
+}
+await enter(page, "+1500 from ravi");
+ok("+ means money in (preview shows +₹1,500)", (await text(page, "[data-testid=preview-amount]")) === "+₹1,500");
+await page.keyboard.press("Escape");
+
+// ---------- Every month ----------
+{
+  // Netflix from two months ago, set to repeat: the months since are added straight away.
+  const d = new Date(); const back = new Date(d.getFullYear(), d.getMonth() - 2, 1);
+  const first = `${back.getDate()}/${back.getMonth() + 1}/${back.getFullYear()}`;
+  await enter(page, `netflix 199 ${first}`);
+  await clickText(page, "Every month");
+  await page.focus("#entry"); await page.keyboard.press("Enter");
+  await wait(1200);
+  const nf = (await dbRows(page)).filter(r => r.note === "netflix");
+  ok(`Every month: catches up to this month (3 entries: ${nf.map(r => r.date).join(", ")})`, nf.length === 3 && new Set(nf.map(r => r.date.slice(0, 7))).size === 3);
+  ok("all three are linked to one repeat", nf.every(r => r.repeatId && r.repeatId === nf[0]!.repeatId));
+  await page.reload({ waitUntil: "networkidle2" }); await page.waitForSelector("#entry"); await wait(600);
+  ok("reopening the app adds nothing twice", (await dbRows(page)).filter(r => r.note === "netflix").length === 3);
+  await clickText(page, "Settings", "nav button");
+  await page.waitForSelector("[data-testid=repeats]");
+  ok("Settings lists it under Every month", (await text(page, "[data-testid=repeats]")).includes("netflix"));
+  await clickText(page, "Stop");
+  await wait(300);
+  ok("Stop removes it from the list", !(await page.$("[data-testid=repeats]")));
+  ok("stopping keeps the entries already added", (await dbRows(page)).filter(r => r.note === "netflix").length === 3);
+  await clickText(page, "Home", "nav button");
+  await page.waitForSelector("#entry");
+  // Turning it on from the edit sheet.
+  const chai = (await dbRows(page)).find(r => r.note === "chai")!;
+  await openRow(page, chai.id);
+  await page.click("dialog input[type=checkbox]");
+  await clickText(page, "Save changes");
+  await wait(500);
+  ok("edit sheet can turn on Every month", !!(await dbRows(page)).find(r => r.id === chai.id)?.repeatId);
+  ok("row says Every month", (await text(page, `button[data-id="${chai.id}"]`)).includes("Every month"));
+}
+
 // ---------- Month ----------
 await clickText(page, "Month", "nav button");
 await page.waitForSelector("[data-testid=month-total]");
 rows = await dbRows(page);
 const monthRows = rows.filter(r => r.date.slice(0, 7) === t.slice(0, 7));
-const monthSum = monthRows.reduce((s, r) => s + r.amountPaise, 0);
-ok("Month total = sum of the month's rows", paise(await text(page, "[data-testid=month-total]")) === monthSum);
+const monthSum = spent(monthRows);
+const monthIn = monthRows.reduce((s, r) => s + (INCOME.has(r.category) ? r.amountPaise : 0), 0);
+ok("Month total = sum of the month's spends (money in excluded)", paise(await text(page, "[data-testid=month-total]")) === monthSum);
 const catSums = await page.$$eval("ul[aria-label='By category'] > li > button", bs => bs.map(b => b.querySelector(".num")!.childNodes[0]!.textContent!.trim()));
 ok(`category rows add up to the month total (${catSums.length} categories)`, catSums.reduce((s, c) => s + paise(c), 0) === monthSum);
 await page.click("ul[aria-label='By category'] > li > button");
+ok(`Month shows money in +₹${(monthIn / 100).toLocaleString("en-IN")}`, (await text(page, "[data-testid=month-in]")).includes(`+₹${(monthIn / 100).toLocaleString("en-IN")}`));
 ok("tapping a category lists its spends", (await page.$$("ul[aria-label='By category'] > li ul button[data-id]")).length >= 1);
 await page.goBack();
 await wait(300);
@@ -169,11 +239,11 @@ await clickText(page, "Save backup file");
 await wait(1200);
 const backupName = readdirSync(dl).find(f => f.endsWith(".json"));
 ok("backup file downloaded", !!backupName);
-await clickText(page, `Export ${before.length} spends`);
+await clickText(page, `Export ${before.length} entries`);
 await wait(1200);
 const csvName = readdirSync(dl).find(f => f.endsWith(".csv"));
 const csv = csvName ? readFileSync(join(dl, csvName), "utf8") : "";
-ok("CSV has a header and one line per spend", csv.startsWith("﻿Date,Amount (₹),Category,Note,Paid by") && csv.trim().split("\r\n").length === before.length + 1);
+ok(`CSV has a header and one line per entry (${csv.trim().split("\r\n").length - 1} lines, ${before.length} entries)`, csv.startsWith("\uFEFFDate,Type,Amount (₹),Category,Note,Paid by") && csv.trim().split("\r\n").length === before.length + 1);
 
 const fresh = await phone();
 ok("a fresh browser starts empty", (await dbRows(fresh)).length === 0);

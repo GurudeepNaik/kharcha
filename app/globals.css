@@ -118,3 +118,9 @@ dialog.sheet[open] { animation: sheet-in 0.26s cubic-bezier(0.23, 1, 0.32, 1); }
 .chip-select:focus { outline: none; }
 select.chip-select { padding-inline-end: 1.6rem; background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position: calc(100% - 0.85rem) 55%, calc(100% - 0.55rem) 55%; background-size: 0.3rem 0.3rem; background-repeat: no-repeat; }
 }
+
+/* Add box docked above the bottom bar; while typing it sits on the keyboard (--kb is set from visualViewport on iPhone). */
+.dock { bottom: calc(4rem + env(safe-area-inset-bottom)); transition: bottom 0.22s cubic-bezier(0.23, 1, 0.32, 1); }
+.dock[data-typing="true"] { bottom: var(--kb, 0px); }
+/* Anything scrolled into view (keyboard Tab, focus) stops above the add box and bottom bar, never under them. */
+html { scroll-padding-bottom: calc(14rem + env(safe-area-inset-bottom)); scroll-padding-top: 1rem; }

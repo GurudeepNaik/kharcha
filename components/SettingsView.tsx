@@ -4,10 +4,11 @@
 import { useEffect, useRef, useState } from "react";
 import { APP_NAME } from "@/lib/brand";
 import { MAX_BACKUP_BYTES, makeBackup, planRestore, readBackup, toCsv, type Backup } from "@/lib/backup";
-import type { Category } from "@/lib/categories";
+import { categoryLabel, isIncomeCategory, type Category } from "@/lib/categories";
 import { shortDate, today } from "@/lib/dates";
 import { readRupees, rupees } from "@/lib/money";
-import type { Expense, Settings } from "@/lib/types";
+import { nextDate } from "@/lib/repeat";
+import type { Expense, Repeat, Settings } from "@/lib/types";
 import { Sheet, SheetHead } from "./ui";
 
 type Plan = { backup: Backup; add: Expense[]; update: Expense[]; unchanged: number };
@@ -20,12 +21,15 @@ function download(name: string, blob: Blob) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export function SettingsView({ rows, learned, settings, persisted, onSettings, onRestore, say }: {
+export function SettingsView({ rows, learned, repeats, settings, persisted, now, onSettings, onStopRepeat, onRestore, say }: {
   rows: Expense[];
   learned: Map<string, Category>;
+  repeats: Repeat[];
   settings: Settings;
   persisted: boolean;
+  now: string;
   onSettings: (s: Partial<Settings>) => Promise<void>;
+  onStopRepeat: (r: Repeat) => Promise<void>;
   onRestore: (plan: Plan) => Promise<void>;
   say: (text: string) => void;
 }) {
@@ -52,7 +56,7 @@ export function SettingsView({ rows, learned, settings, persisted, onSettings, o
 
   function backupFile() {
     const name = `${APP_NAME.toLowerCase()}-backup-${today()}.json`;
-    return new File([JSON.stringify(makeBackup(rows, learned, settings))], name, { type: "application/json" });
+    return new File([JSON.stringify(makeBackup(rows, learned, settings, repeats))], name, { type: "application/json" });
   }
 
   async function share() {
@@ -104,9 +108,32 @@ export function SettingsView({ rows, learned, settings, persisted, onSettings, o
       </form>
 
       <div className="rounded-2xl border border-line bg-card p-4">
+        <h2 className="font-semibold">Every month</h2>
+        {repeats.length === 0 ? (
+          <p className="mt-0.5 text-sm text-muted">Nothing repeats yet. Tap &ldquo;Every month&rdquo; when you add rent, salary or a subscription, and it&rsquo;s added for you each month.</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-line" data-testid="repeats">
+            {[...repeats].sort((a, b) => a.day - b.day).map(r => {
+              const inc = isIncomeCategory(r.category);
+              const next = nextDate(r);
+              return (
+                <li key={r.id} className="flex items-center gap-3 py-2.5">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{r.note || categoryLabel(r.category)} <span className={`num ${inc ? "text-accent" : ""}`}>{inc ? "+" : ""}{rupees(r.amountPaise)}</span></span>
+                    <span className="block text-[13px] text-muted">Next: {next <= now ? "today" : shortDate(next)}</span>
+                  </span>
+                  <button type="button" onClick={() => void onStopRepeat(r)} className="press min-h-11 shrink-0 rounded-xl border border-line px-3 text-[14px] font-semibold">Stop</button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-line bg-card p-4">
         <h2 className="font-semibold">Back up</h2>
         <p className="mt-0.5 text-sm text-muted">
-          Your spends are saved only in this browser on this phone. Save a backup now and then, so you can get them back on a new phone or if the browser&rsquo;s data is cleared.
+          Your entries are saved only in this browser on this phone. Save a backup now and then, so you can get them back on a new phone or if the browser&rsquo;s data is cleared.
           {settings.lastBackupAt ? ` Last backup: ${shortDate(settings.lastBackupAt.slice(0, 10))}.` : " No backup yet."}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -123,11 +150,11 @@ export function SettingsView({ rows, learned, settings, persisted, onSettings, o
 
       <div className="rounded-2xl border border-line bg-card p-4">
         <h2 className="font-semibold">Export for Excel</h2>
-        <p className="mt-0.5 text-sm text-muted">Every spend as a CSV file that opens in Excel or Google Sheets.</p>
+        <p className="mt-0.5 text-sm text-muted">Every entry, money in and spent, as a CSV file that opens in Excel or Google Sheets.</p>
         <button type="button" disabled={!rows.length}
           onClick={() => { download(`${APP_NAME.toLowerCase()}-${today()}.csv`, new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" })); say("CSV saved to your downloads"); }}
           className="press mt-3 min-h-12 rounded-xl border border-line px-4 font-semibold disabled:opacity-50">
-          Export {rows.length === 1 ? "1 spend" : `${rows.length} spends`}
+          Export {rows.length === 1 ? "1 entry" : `${rows.length} entries`}
         </button>
       </div>
 
@@ -137,7 +164,7 @@ export function SettingsView({ rows, learned, settings, persisted, onSettings, o
             <SheetHead title="Restore this backup?" onClose={() => setPlan(null)} />
             <p className="text-[15px]">
               {plan.backup.exportedAt && /^\d{4}-\d{2}-\d{2}/.test(plan.backup.exportedAt) ? `Backup from ${shortDate(plan.backup.exportedAt.slice(0, 10))}, ` : "This backup has "}
-              {plan.backup.expenses.length === 1 ? "1 spend" : `${plan.backup.expenses.length} spends`}.
+              {plan.backup.expenses.length === 1 ? "1 entry" : `${plan.backup.expenses.length} entries`}.
             </p>
             <ul className="mt-2 space-y-0.5 text-[15px]" data-testid="restore-plan">
               <li><strong className="num">{plan.add.length}</strong> new, will be added</li>

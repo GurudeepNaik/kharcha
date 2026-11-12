@@ -1,23 +1,39 @@
 // The fixed list of categories and the words that point to each one.
 
-export type Category = "food" | "groceries" | "travel" | "bills" | "shopping" | "health" | "rent" | "other";
+export type SpendCategory = "food" | "groceries" | "travel" | "bills" | "shopping" | "health" | "rent" | "other";
+export type IncomeCategory = "salary" | "business" | "refund" | "income";
+export type Category = SpendCategory | IncomeCategory;
 
-export const CATEGORIES: { key: Category; label: string }[] = [
-  { key: "food", label: "Food" },
-  { key: "groceries", label: "Groceries" },
-  { key: "travel", label: "Travel" },
-  { key: "bills", label: "Bills" },
-  { key: "shopping", label: "Shopping" },
-  { key: "health", label: "Health" },
-  { key: "rent", label: "Rent & EMI" },
-  { key: "other", label: "Other" },
+/** Money out first, then money in. Whether an entry is income comes from its category, so the two never disagree. */
+export const CATEGORIES: { key: Category; label: string; income: boolean }[] = [
+  { key: "food", label: "Food", income: false },
+  { key: "groceries", label: "Groceries", income: false },
+  { key: "travel", label: "Travel", income: false },
+  { key: "bills", label: "Bills", income: false },
+  { key: "shopping", label: "Shopping", income: false },
+  { key: "health", label: "Health", income: false },
+  { key: "rent", label: "Rent & EMI", income: false },
+  { key: "other", label: "Other", income: false },
+  { key: "salary", label: "Salary", income: true },
+  { key: "business", label: "Business", income: true },
+  { key: "refund", label: "Refund", income: true },
+  { key: "income", label: "Other income", income: true },
 ];
+export const isIncomeCategory = (k: Category) => k === "salary" || k === "business" || k === "refund" || k === "income";
 export const CATEGORY_KEYS = CATEGORIES.map(c => c.key);
 export const categoryLabel = (k: Category) => CATEGORIES.find(c => c.key === k)?.label ?? "Other";
 export const isCategory = (k: unknown): k is Category => typeof k === "string" && (CATEGORY_KEYS as string[]).includes(k);
 
 /** Words (English and common Indian ones, as people type them in English letters). */
-const WORDS: Record<Exclude<Category, "other">, string[]> = {
+const INCOME_WORDS: Record<IncomeCategory, string[]> = {
+  // Only words that can't describe paying for something: "pay electricity" or "client lunch" must stay spends.
+  salary: ["salary", "payslip", "stipend", "bonus", "wages", "payday", "pension"],
+  business: ["freelance", "sales", "invoice paid", "shop sales"],
+  refund: ["refund", "cashback", "reversal", "reimbursement"],
+  income: ["income", "received", "credited", "dividend"],
+};
+
+const WORDS: Record<Exclude<SpendCategory, "other">, string[]> = {
   food: ["chai", "tea", "coffee", "lunch", "dinner", "breakfast", "snack", "snacks", "hotel", "restaurant", "cafe", "canteen", "mess", "tiffin",
     "swiggy", "zomato", "idli", "dosa", "vada", "biryani", "meals", "meal", "thali", "pizza", "burger", "juice", "icecream", "sweets", "bakery",
     "parcel", "food", "khana", "nashta", "pani puri", "chaat", "samosa", "paratha", "dhaba"],
@@ -34,6 +50,8 @@ const WORDS: Record<Exclude<Category, "other">, string[]> = {
   rent: ["rent", "maintenance", "emi", "loan", "pg", "hostel", "deposit"],
 };
 
+const INCOME = new Map<string, Category>();
+for (const [cat, words] of Object.entries(INCOME_WORDS)) for (const w of words) INCOME.set(w, cat as Category);
 const LOOKUP = new Map<string, Category>();
 for (const [cat, words] of Object.entries(WORDS)) for (const w of words) if (!LOOKUP.has(w)) LOOKUP.set(w, cat as Category);
 
@@ -41,14 +59,17 @@ for (const [cat, words] of Object.entries(WORDS)) for (const w of words) if (!LO
 export const wordsOf = (note: string) => note.toLowerCase().replace(/[^a-z0-9ऀ-෿\s]/g, " ").split(/\s+/).filter(Boolean);
 
 /**
- * Category for a note: a word the person taught us wins, then two-word and one-word built-in matches,
+ * Category for a note: a word the person taught us wins, then money-in words, then two-word and one-word built-in matches,
  * then a plural or longer form ("medicines", "petrol pump"), else Other.
  */
 export function guessCategory(note: string, learned: ReadonlyMap<string, Category>): Category {
   const words = wordsOf(note);
   for (const w of words) { const c = learned.get(w); if (c) return c; }
-  for (let i = 0; i < words.length - 1; i++) { const c = LOOKUP.get(`${words[i]} ${words[i + 1]}`); if (c) return c; }
-  for (const w of words) { const c = LOOKUP.get(w); if (c) return c; }
+  // Money-in words win anywhere in the note: "amazon refund" is a refund, not shopping.
+  for (const map of [INCOME, LOOKUP]) {
+    for (let i = 0; i < words.length - 1; i++) { const c = map.get(`${words[i]} ${words[i + 1]}`); if (c) return c; }
+    for (const w of words) { const c = map.get(w); if (c) return c; }
+  }
   for (const w of words) {
     if (w.length < 4) continue;
     for (const [k, c] of LOOKUP) if (k.length >= 4 && w.startsWith(k)) return c;
