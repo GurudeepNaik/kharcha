@@ -12,10 +12,12 @@ import { dailySpend, monthTotals, vsLastMonth } from "@/lib/trends";
 import type { Expense, Settings } from "@/lib/types";
 import { BarChart } from "./BarChart";
 import { LimitLine } from "./LimitLine";
+import { TaxCard } from "./TaxCard";
 import { Icon, SpendRow, Svg, card } from "./ui";
 
-export function MonthView({ rows, now, settings, onOpen, isRepeating }: {
+export function MonthView({ rows, now, settings, onOpen, isRepeating, onSettings }: {
   rows: Expense[]; now: string; settings: Settings; onOpen: (e: Expense) => void; isRepeating: (e: Expense) => boolean;
+  onSettings: (s: Partial<Settings>) => Promise<void>;
 }) {
   const i = useI18n();
   const { t } = i;
@@ -144,6 +146,8 @@ export function MonthView({ rows, now, settings, onOpen, isRepeating }: {
           )}
         </section>
       )}
+
+      <TaxCard key={month} rows={rows} month={month} now={now} settings={settings} onSettings={onSettings} onOpen={onOpen} />
 
       {money.length > 0 && (
         <section aria-labelledby="in-title">

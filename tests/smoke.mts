@@ -261,7 +261,28 @@ ok(`category rows add up to the month total (${catSums.length} categories)`, cat
 await page.click("ul[aria-label='By category'] > li > button");
 ok(`Month shows money in +₹${(monthIn / 100).toLocaleString("en-IN")}`, (await text(page, "[data-testid=month-in]")).includes(`+₹${(monthIn / 100).toLocaleString("en-IN")}`));
 ok("Month lists investments by type (this month and all time)", (await text(page, "[data-testid=invest-summary]")).includes("Health insurance"));
+// Tax saving (current financial year): health insurance ₹12,000 counts under Section 126; the plain SIP doesn't.
+{
+  const fyStart = new Date().getMonth() >= 3 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+  ok(`tax card shows FY ${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, (await text(page, "#tax-title")).includes(`${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`));
+  ok("Section 126: ₹12,000 of ₹25,000", (await text(page, "[data-testid=tax-d]")).includes("₹12,000 of ₹25,000"));
+  await page.click("[data-testid=seniorSelf]"); await wait(300);
+  ok("60 or older: limit becomes ₹50,000", (await text(page, "[data-testid=tax-d]")).includes("₹12,000 of ₹50,000"));
+  await page.click("[data-testid=seniorSelf]"); await wait(300);
+  ok("plain SIP isn't counted under Section 123", (await text(page, "[data-testid=tax-c]")).includes("₹0 of ₹1,50,000"));
+}
 ok("tapping a category lists its spends", (await page.$$("ul[aria-label='By category'] > li ul button[data-id]")).length >= 1);
+{
+  const sip = (await dbRows(page)).find(r => r.note === "sip")!;
+  await page.$eval("[data-testid=tax-c]", el => el.scrollIntoView({ block: "center" }));
+  await page.goBack(); await wait(300);
+  await openRow(page, sip.id);
+  await page.select("#edit-tax", "c");
+  await clickText(page, "Save changes"); await wait(400);
+  ok("choosing Section 123 on an entry is saved", (await dbRows(page)).find(r => r.id === sip.id)?.tax === "c");
+  await clickText(page, "Month", "nav button"); await page.waitForSelector("[data-testid=tax-c]");
+  ok("...and Section 123 now counts ₹5,000", (await text(page, "[data-testid=tax-c]")).includes("₹5,000 of ₹1,50,000"));
+}
 await page.goBack();
 await wait(300);
 ok("phone Back returns to Home", !!(await page.$("#entry")));

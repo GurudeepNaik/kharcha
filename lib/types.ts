@@ -1,4 +1,5 @@
 import type { Category, SpendCategory } from "./categories";
+import type { TaxTag } from "./tax";
 import type { Method } from "./parse";
 
 export interface Expense {
@@ -12,6 +13,8 @@ export interface Expense {
   updatedAt: string; // ISO
   /** Set when this entry repeats every month (the rule's id). */
   repeatId?: string;
+  /** Tax section chosen by the person; when absent, lib/tax.ts suggests one from the category and note. */
+  tax?: TaxTag;
 }
 
 /** "Every month": copies an entry onto the same day each month (the last day in shorter months). */
@@ -26,5 +29,5 @@ export interface Repeat {
   createdAt: string;
 }
 export type CategoryLimits = Partial<Record<SpendCategory, number>>;
-export interface Settings { monthlyLimitPaise: number | null; lastBackupAt: string | null; categoryLimits: CategoryLimits }
-export const DEFAULT_SETTINGS: Settings = { monthlyLimitPaise: null, lastBackupAt: null, categoryLimits: {} };
+export interface Settings { monthlyLimitPaise: number | null; lastBackupAt: string | null; categoryLimits: CategoryLimits; seniorSelf: boolean; seniorParents: boolean }
+export const DEFAULT_SETTINGS: Settings = { monthlyLimitPaise: null, lastBackupAt: null, categoryLimits: {}, seniorSelf: false, seniorParents: false };

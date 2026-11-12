@@ -132,3 +132,40 @@ console.log("BACKUP V3 OK");
   for (const [name, readings, want] of CASES) assert.equal(RC.receiptToLine(readings), want, `receipt: ${name}`);
   console.log(`RECEIPTS OK (${CASES.length})`);
 }
+
+// ---------- Tax saving (old regime) ----------
+{
+  const TX = (await import("../lib/tax.ts")) as typeof import("../lib/tax");
+  const x = (date: string, rs: number, category: string, note: string, i: number, tax?: string): Expense =>
+    ({ ...e(date, rs, category, i), note, ...(tax ? { tax: tax as Expense["tax"] } : {}) });
+  // Suggestions from category and note
+  const S2: [string, string, string][] = [
+    ["retirement", "ppf", "c"], ["retirement", "nps", "nps"], ["termIns", "term plan", "c"], ["otherIns", "lic", "c"], ["otherIns", "car insurance", "none"],
+    ["sip", "sip", "none"], ["sip", "elss sip", "c"], ["deposit", "fd", "none"], ["deposit", "tax saver fd", "c"], ["invest", "sukanya", "c"],
+    ["healthIns", "health insurance", "d"], ["healthIns", "health insurance parents", "dp"], ["health", "health checkup", "d"], ["health", "medicine", "none"],
+    ["bills", "school tuition", "c"], ["bills", "school fees", "none"], ["food", "chai", "none"],
+  ];
+  for (const [cat, note, want] of S2) assert.equal(TX.suggestTax(x("2026-06-01", 1, cat, note, 1)), want, `tax suggestion: ${cat} "${note}"`);
+  assert.equal(TX.taxOf(x("2026-06-01", 1, "sip", "sip", 1, "c")), "c", "a person's choice beats the suggestion");
+  assert.equal(TX.taxOf(x("2026-06-01", 1, "retirement", "ppf", 1, "none")), "none");
+  // Financial year
+  assert.equal(TX.fyOf("2026-04-01"), "2026-27"); assert.equal(TX.fyOf("2027-03-31"), "2026-27"); assert.equal(TX.fyOf("2026-03-31"), "2025-26");
+  assert.equal(TX.prevFy("2026-27"), "2025-26"); assert.equal(TX.fyOf("2099-12-01"), "2099-00");
+  // Totals, limits, NPS spill-over, check-up cap, senior limits
+  const rows2 = [
+    x("2026-05-01", 100000, "retirement", "ppf", 1),
+    x("2026-07-01", 30000, "termIns", "term insurance", 2),
+    x("2026-08-01", 70000, "retirement", "nps", 3),         // ₹50,000 to Section 124, ₹20,000 spills into 123
+    x("2026-09-01", 30000, "healthIns", "health insurance", 4), // above the ₹25,000 limit
+    x("2026-10-01", 8000, "health", "health checkup parents", 5), // check-ups capped at ₹5,000
+    x("2026-03-15", 99999, "retirement", "ppf", 6),          // previous financial year: not counted
+    x("2027-02-01", 5000, "sip", "sip", 7),                  // plain SIP: not counted
+  ];
+  const by = (l: import("../lib/tax").TaxLine[]) => Object.fromEntries(l.map(t => [t.tag, [t.paid / 100, t.counted / 100, t.limit / 100]]));
+  assert.deepEqual(by(TX.taxSummary(rows2, "2026-27", { self: false, parents: false })), {
+    c: [150000, 150000, 150000], nps: [70000, 50000, 50000], d: [30000, 25000, 25000], dp: [8000, 5000, 25000],
+  });
+  assert.deepEqual(by(TX.taxSummary(rows2, "2026-27", { self: true, parents: true })).d, [30000, 30000, 50000], "senior: ₹50,000 limit");
+  assert.deepEqual(by(TX.taxSummary(rows2, "2025-26", { self: false, parents: false })).c, [99999, 99999, 150000], "the year before counts on its own");
+  console.log(`TAX OK (${S2.length} suggestions, limits, spill-over, check-ups, seniors)`);
+}

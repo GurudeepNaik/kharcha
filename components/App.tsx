@@ -304,7 +304,7 @@ export function App() {
             <AddBox ref={addBox} now={now} learned={learned} typing={typing} onAdd={add} onDebt={addDebt} />
           </>
         )}
-        {tab === "month" && <MonthView rows={rows} now={now} settings={settings} onOpen={setEditing} isRepeating={isRepeating} />}
+        {tab === "month" && <MonthView rows={rows} now={now} settings={settings} onOpen={setEditing} isRepeating={isRepeating} onSettings={updateSettings} />}
         {tab === "people" && <PeopleView debts={debts} now={now} onAdd={addDebt} onDelete={removeDebt} />}
         {tab === "settings" && (
           <SettingsView rows={rows} learned={learned} repeats={repeats} debts={debts} settings={settings} persisted={persisted} now={now}

@@ -3,6 +3,7 @@ import { isCategory, isSpendCategory, kindOf, categoryLabel, type Category } fro
 import { validDate } from "./dates";
 import { MAX_PAISE, plainAmount } from "./money";
 import type { Debt } from "./debts";
+import { isTaxTag } from "./tax";
 import type { CategoryLimits, Expense, Repeat, Settings } from "./types";
 
 export const BACKUP_KIND = "expense-tracker-backup";
@@ -18,14 +19,14 @@ export interface Backup {
   learned: { word: string; category: Category }[];
   repeats: Repeat[];
   debts: Debt[];
-  settings: Pick<Settings, "monthlyLimitPaise" | "categoryLimits">;
+  settings: Pick<Settings, "monthlyLimitPaise" | "categoryLimits" | "seniorSelf" | "seniorParents">;
 }
 
 export function makeBackup(expenses: Expense[], learned: Map<string, Category>, settings: Settings, repeats: Repeat[] = [], debts: Debt[] = [], now = new Date()): Backup {
   return {
     kind: BACKUP_KIND, version: BACKUP_VERSION, exportedAt: now.toISOString(), expenses, repeats, debts,
     learned: [...learned].map(([word, category]) => ({ word, category })),
-    settings: { monthlyLimitPaise: settings.monthlyLimitPaise, categoryLimits: settings.categoryLimits },
+    settings: { monthlyLimitPaise: settings.monthlyLimitPaise, categoryLimits: settings.categoryLimits, seniorSelf: settings.seniorSelf, seniorParents: settings.seniorParents },
   };
 }
 
@@ -47,6 +48,7 @@ function validExpense(x: unknown): Expense | null {
   if (e.repeatId !== undefined && (typeof e.repeatId !== "string" || !ID.test(e.repeatId))) return null;
   const out: Expense = { id: e.id, amountPaise: e.amountPaise, note: e.note, category: e.category, method: e.method, date: e.date, createdAt: e.createdAt, updatedAt: e.updatedAt };
   if (e.repeatId !== undefined) out.repeatId = e.repeatId;
+  if (e.tax !== undefined) { if (!isTaxTag(e.tax)) return null; out.tax = e.tax; }
   return out;
 }
 
@@ -116,7 +118,7 @@ export function readBackup(text: string): { ok: true; value: Backup } | { ok: fa
   }
   const limit = s.monthlyLimitPaise;
   const monthlyLimitPaise = typeof limit === "number" && Number.isInteger(limit) && limit > 0 && limit <= MAX_PAISE ? limit : null;
-  return { ok: true, value: { kind: BACKUP_KIND, version: b.version, exportedAt: String(b.exportedAt ?? ""), expenses, learned, repeats, debts, settings: { monthlyLimitPaise, categoryLimits } } };
+  return { ok: true, value: { kind: BACKUP_KIND, version: b.version, exportedAt: String(b.exportedAt ?? ""), expenses, learned, repeats, debts, settings: { monthlyLimitPaise, categoryLimits, seniorSelf: s.seniorSelf === true, seniorParents: s.seniorParents === true } } };
 }
 
 /** What a restore would do: new rows, rows where the backup's copy is newer, and rows already the same or newer here. */

@@ -3,6 +3,7 @@
 // Change or delete one entry.
 import { useState } from "react";
 import { useI18n } from "@/lib/i18n";
+import { TAX_TAGS, suggestTax, type TaxTag } from "@/lib/tax";
 import { CATEGORIES, type Category } from "@/lib/categories";
 import { plainAmount, readRupees } from "@/lib/money";
 import type { Method } from "@/lib/parse";
@@ -43,6 +44,7 @@ function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip }: {
   const [date, setDate] = useState(e.date);
   const [method, setMethod] = useState<Method | null>(e.method);
   const [monthly, setMonthly] = useState(repeating);
+  const [tax, setTax] = useState<TaxTag | "">(e.tax ?? "");
   const [error, setError] = useState<{ field: "amount" | "date"; text: string } | null>(null);
 
   async function submit(ev: React.FormEvent) {
@@ -50,7 +52,9 @@ function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip }: {
     const a = readRupees(amount);
     if (!a.ok) { setError({ field: "amount", text: t.err[a.code] }); document.getElementById("edit-amount")?.focus(); return; }
     if (!date || date > now) { setError({ field: "date", text: t.err.pickDate }); return; }
-    await onSave({ ...e, amountPaise: a.paise, note: note.trim().slice(0, 60), category, date, method, updatedAt: new Date().toISOString() }, category !== e.category, monthly);
+    const next: Expense = { ...e, amountPaise: a.paise, note: note.trim().slice(0, 60), category, date, method, updatedAt: new Date().toISOString() };
+    if (tax) next.tax = tax; else delete next.tax;
+    await onSave(next, category !== e.category, monthly);
   }
 
   return (
@@ -102,6 +106,12 @@ function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip }: {
           ))}
         </div>
       </fieldset>
+
+      <label htmlFor="edit-tax" className="mt-3 mb-1 block text-sm font-medium">{t.tax.edit}</label>
+      <select id="edit-tax" value={tax} onChange={x => setTax(x.target.value as TaxTag | "")} className="field">
+        <option value="">{t.tax.auto(t.tax[suggestTax({ ...e, category, note })])}</option>
+        {TAX_TAGS.map(k => <option key={k} value={k}>{t.tax[k]}</option>)}
+      </select>
 
       <label className="mt-4 flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-line px-3 has-checked:border-accent has-checked:bg-accent-soft">
         <input type="checkbox" checked={monthly} onChange={x => setMonthly(x.target.checked)} className="size-5 accent-[var(--accent)]" />
