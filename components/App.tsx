@@ -10,11 +10,14 @@ import { rupees } from "@/lib/money";
 import type { Parsed } from "@/lib/parse";
 import { dueRepeats, nextDate, repeatFrom, skipNext } from "@/lib/repeat";
 import { readImageText, takeInbox } from "@/lib/ocr";
+import { base64ToBlob, compressPhoto } from "@/lib/image";
+import type { ImportItem } from "@/lib/statement";
+import type { Account, Goal, Holding, Transfer } from "@/lib/wealth";
 import { receiptToLine } from "@/lib/receipt";
 import { sharedToLine } from "@/lib/share";
 import {
-  allDebts, allExpenses, allRepeats, applyDue, applyRestore, deleteDebt, deleteExpense, deleteRepeat, getSettings, keepData, learn, learnedMap, newId,
-  putDebt, putExpense, putRepeat, saveSettings,
+  all, allDebts, allExpenses, allRepeats, applyDue, applyRestore, del, deleteDebt, deleteExpense, deletePhoto, deleteRepeat, getPhoto, getSettings, keepData, learn, learnedMap, newId,
+  put, putDebt, putExpense, putPhoto, putRepeat, saveSettings,
 } from "@/lib/store";
 import { inMonth, sortRows, sum } from "@/lib/totals";
 import { DEFAULT_SETTINGS, type Expense, type Repeat, type Settings } from "@/lib/types";
@@ -26,10 +29,11 @@ import { MonthView } from "./MonthView";
 import { PeopleView } from "./PeopleView";
 import { SettingsView } from "./SettingsView";
 import { ThemeToggle } from "./ThemeToggle";
+import { WealthView, type ListName } from "./WealthView";
 import { Icon, Svg, Toast, card, type ToastMsg } from "./ui";
 
-type Tab = "home" | "month" | "people" | "settings";
-const TABS: Tab[] = ["home", "month", "people", "settings"];
+type Tab = "home" | "month" | "wealth" | "people" | "settings";
+const TABS: Tab[] = ["home", "month", "wealth", "people", "settings"];
 const tabFromHash = (): Tab => { const h = location.hash.slice(1); return (TABS as string[]).includes(h) ? (h as Tab) : "home"; };
 
 export function App() {
@@ -38,6 +42,10 @@ export function App() {
   const [learned, setLearned] = useState<Map<string, Category>>(new Map());
   const [repeats, setRepeats] = useState<Repeat[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [persisted, setPersisted] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -49,7 +57,7 @@ export function App() {
   const toastId = useRef(0);
   const addBox = useRef<AddBoxHandle>(null);
   const pending = useRef<{ fill?: string; focus?: boolean; inbox?: boolean; lost?: boolean } | null>(null);
-  const [receipt, setReceipt] = useState<{ url: string; status: "reading" | "done" | "failed" } | null>(null);
+  const [receipt, setReceipt] = useState<{ url: string; status: "reading" | "done" | "failed"; blob: Blob; keep: boolean } | null>(null);
 
   const i18n: I18n = useMemo(() => ({
     lang, t: MESSAGES[lang], locale: localeOf(lang),
@@ -75,8 +83,8 @@ export function App() {
     if (location.search) history.replaceState(null, "", location.pathname + location.hash);
     setTab(pending.current ? "home" : tabFromHash());
 
-    Promise.all([allExpenses(), learnedMap(), getSettings(), allRepeats(), allDebts()])
-      .then(([r, l2, s, rp, d]) => { setRows(r); setLearned(l2); setSettings(s); setRepeats(rp); setDebts(d); })
+    Promise.all([allExpenses(), learnedMap(), getSettings(), allRepeats(), allDebts(), all("accounts"), all("transfers"), all("holdings"), all("goals")])
+      .then(([r, l2, s, rp, d, ac, tr, ho, go]) => { setRows(r); setLearned(l2); setSettings(s); setRepeats(rp); setDebts(d); setAccounts(ac); setTransfers(tr); setHoldings(ho); setGoals(go); })
       .catch(() => setFailed(true));
     void navigator.storage?.persisted?.().then(setPersisted).catch(() => undefined);
     const tick = () => setNow(today());
@@ -123,7 +131,7 @@ export function App() {
     if (!box) { say(MESSAGES[initialLang()].receipt.lost); return; }
     const fromText = sharedToLine(box.title, box.text, box.url);
     if (!box.file) { if (fromText) addBox.current?.fill(fromText); else addBox.current?.focus(); return; }
-    setReceipt({ url: URL.createObjectURL(box.file), status: "reading" });
+    setReceipt({ url: URL.createObjectURL(box.file), status: "reading", blob: box.file, keep: true });
     let line: string | null = null;
     try { line = receiptToLine(await readImageText(box.file)); } catch (err) { console.warn("receipt reader failed", err); line = null; }
     line ??= fromText;
@@ -176,9 +184,14 @@ export function App() {
     return spent > budget ? ` ${t.toast.overBudget(t.cat[e.category], spent - budget)}` : "";
   }
 
-  async function add(p: Parsed, picked: boolean, everyMonth: boolean) {
+  async function add(p: Parsed, picked: boolean, everyMonth: boolean, accountId?: string | null) {
     const at = new Date().toISOString();
     let e: Expense = { id: newId(), ...p, createdAt: at, updatedAt: at };
+    // Account: the one picked, else the default for UPI or cash payments.
+    const acct = accountId !== undefined ? accountId : p.method === "upi" ? settings.upiAccount : p.method === "cash" ? settings.cashAccount : null;
+    if (acct) e.accountId = acct;
+    // A receipt shared in is kept with the entry unless the person said not to.
+    if (receipt?.keep) { try { await putPhoto(e.id, await compressPhoto(receipt.blob)); e.photo = true; } catch { /* keep the entry without it */ } }
     await putExpense(e);
     if (everyMonth) e = await startRepeat(e);
     const next = sortRows([e, ...(rows ?? []).filter(x => x.id !== e.id)]);
@@ -213,11 +226,14 @@ export function App() {
   }
 
   async function remove(e: Expense, quiet = false) {
+    const photo = e.photo ? await getPhoto(e.id) : null;
     await deleteExpense(e.id);
+    if (photo) await deletePhoto(e.id);
     setRows(r => (r ?? []).filter(x => x.id !== e.id));
     setEditing(null);
     if (quiet) { say(t.toast.removed); return; }
     say(t.toast.deleted(`${rupees(e.amountPaise)} ${e.note || t.cat[e.category]}`), async () => {
+      if (photo) await putPhoto(e.id, photo);
       await putExpense(e);
       setRows(r => sortRows([e, ...(r ?? []).filter(x => x.id !== e.id)]));
     });
@@ -270,6 +286,50 @@ export function App() {
     say(t.toast.deleted(`${rupees(d.amountPaise)} · ${d.person}`), async () => { await putDebt(d); setDebts(ds => [...ds.filter(x => x.id !== d.id), d]); });
   }
 
+  /** Photo added to or removed from an entry (from the edit sheet). */
+  async function setPhoto(e: Expense, file: Blob | null) {
+    let next: Expense;
+    if (file) { await putPhoto(e.id, await compressPhoto(file)); next = { ...e, photo: true, updatedAt: new Date().toISOString() }; }
+    else { await deletePhoto(e.id); next = { ...e, updatedAt: new Date().toISOString() }; delete next.photo; }
+    await putExpense(next);
+    setRows(r => sortRows((r ?? []).map(x => (x.id === next.id ? next : x))));
+    setEditing(next);
+  }
+
+  const setters = { accounts: setAccounts, transfers: setTransfers, holdings: setHoldings, goals: setGoals } as const;
+  async function saveItem(list: ListName, item: Account | Transfer | Holding | Goal) {
+    await put(list, item as never);
+    (setters[list] as unknown as (f: (xs: { id: string }[]) => { id: string }[]) => void)(xs => [...xs.filter(x => x.id !== item.id), item]);
+  }
+  async function deleteItem(list: ListName, id: string) {
+    await del(list, id);
+    (setters[list] as unknown as (f: (xs: { id: string }[]) => { id: string }[]) => void)(xs => xs.filter(x => x.id !== id));
+    if (list === "accounts") {
+      const patch: Partial<Settings> = {};
+      if (settings.upiAccount === id) patch.upiAccount = null;
+      if (settings.cashAccount === id) patch.cashAccount = null;
+      if (Object.keys(patch).length) await updateSettings(patch);
+    }
+  }
+
+  /** Statement rows the person kept ticked become entries, in one go (Undo removes them all). */
+  async function importRows(items: ImportItem[], accountId: string | null) {
+    const at = new Date().toISOString();
+    const made: Expense[] = items.map(x => {
+      const e: Expense = { id: newId(), amountPaise: x.row.amountPaise, note: x.row.note.slice(0, 60), category: x.category, method: x.row.method, date: x.row.date, createdAt: at, updatedAt: at };
+      if (accountId) e.accountId = accountId;
+      return e;
+    });
+    await applyRestore(made, []);
+    setRows(r => sortRows([...made, ...(r ?? [])]));
+    if (!persisted) void keepData().then(setPersisted);
+    say(t.importer.done(made.length), async () => {
+      for (const e of made) await deleteExpense(e.id);
+      const ids = new Set(made.map(e => e.id));
+      setRows(r => (r ?? []).filter(x => !ids.has(x.id)));
+    });
+  }
+
   async function updateSettings(s: Partial<Settings>) {
     await saveSettings(s);
     setSettings(cur => ({ ...cur, ...s }));
@@ -294,6 +354,10 @@ export function App() {
                     {receipt.status === "reading" ? t.receipt.reading : receipt.status === "done" ? t.receipt.done : t.receipt.failed}
                   </p>
                   {receipt.status === "reading" && <p className="mt-1 text-[13px] text-muted">{t.receipt.first}</p>}
+                  <label className="mt-1.5 flex min-h-11 cursor-pointer items-center gap-2 text-[13px]">
+                    <input type="checkbox" checked={receipt.keep} onChange={e => setReceipt(r => r && { ...r, keep: e.target.checked })} className="size-5 accent-[var(--accent)]" data-testid="receipt-keep" />
+                    {t.photo.keep}
+                  </label>
                 </div>
                 <button type="button" onClick={closeReceipt} aria-label={t.receipt.close} className="press grid size-11 shrink-0 place-items-center rounded-full bg-soft text-muted">
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -301,26 +365,35 @@ export function App() {
               </div>
             )}
             <HomeView rows={rows} now={now} settings={settings} repeats={repeats} onSkip={skipRepeat} onOpen={setEditing} onMonth={() => go("month")} onBackup={() => go("settings")} isRepeating={isRepeating} />
-            <AddBox ref={addBox} now={now} learned={learned} typing={typing} onAdd={add} onDebt={addDebt} />
+            <AddBox ref={addBox} now={now} learned={learned} typing={typing} accounts={accounts} settings={settings} onAdd={add} onDebt={addDebt} />
           </>
         )}
-        {tab === "month" && <MonthView rows={rows} now={now} settings={settings} onOpen={setEditing} isRepeating={isRepeating} onSettings={updateSettings} />}
+        {tab === "month" && <MonthView rows={rows} now={now} settings={settings} repeats={repeats} onOpen={setEditing} isRepeating={isRepeating} onSettings={updateSettings} />}
+        {tab === "wealth" && <WealthView rows={rows} now={now} accounts={accounts} transfers={transfers} holdings={holdings} goals={goals} settings={settings}
+          onSave={saveItem} onDelete={deleteItem} onSettings={updateSettings} say={x => say(x)} />}
         {tab === "people" && <PeopleView debts={debts} now={now} onAdd={addDebt} onDelete={removeDebt} />}
         {tab === "settings" && (
           <SettingsView rows={rows} learned={learned} repeats={repeats} debts={debts} settings={settings} persisted={persisted} now={now}
+            extra={{ accounts, transfers, holdings, goals }} onImport={importRows}
             onSettings={updateSettings} onStopRepeat={stopRepeat} onSkipRepeat={skipRepeat} say={x => say(x)}
             onRestore={async p => {
-              await applyRestore([...p.add, ...p.update], p.backup.learned, p.backup.repeats, p.backup.debts);
+              const b = p.backup;
+              await applyRestore([...p.add, ...p.update], b.learned, b.repeats, b.debts, {
+                accounts: b.accounts, transfers: b.transfers, holdings: b.holdings, goals: b.goals,
+                photos: b.photos.map(x => ({ id: x.id, blob: base64ToBlob(x.data, x.type) })),
+              });
               const patch: Partial<Settings> = {};
               if (!settings.monthlyLimitPaise && p.backup.settings.monthlyLimitPaise) patch.monthlyLimitPaise = p.backup.settings.monthlyLimitPaise;
               if (!Object.keys(settings.categoryLimits).length && Object.keys(p.backup.settings.categoryLimits).length) patch.categoryLimits = p.backup.settings.categoryLimits;
+              if (!settings.upiAccount && b.settings.upiAccount) patch.upiAccount = b.settings.upiAccount;
+              if (!settings.cashAccount && b.settings.cashAccount) patch.cashAccount = b.settings.cashAccount;
               if (Object.keys(patch).length) await updateSettings(patch);
-              const [r, l, rp, d] = await Promise.all([allExpenses(), learnedMap(), allRepeats(), allDebts()]);
-              setRows(r); setLearned(l); setRepeats(rp); setDebts(d);
+              const [r, l, rp, d, ac, tr, ho, go] = await Promise.all([allExpenses(), learnedMap(), allRepeats(), allDebts(), all("accounts"), all("transfers"), all("holdings"), all("goals")]);
+              setRows(r); setLearned(l); setRepeats(rp); setDebts(d); setAccounts(ac); setTransfers(tr); setHoldings(ho); setGoals(go);
               say(t.toast.restored(p.add.length, p.update.length));
             }} />
         )}
-        <EditSheet expense={editing} repeating={!!editing && isRepeating(editing)} now={now} onClose={() => setEditing(null)} onSave={save} onDelete={e => remove(e)} onSkip={skipThisMonth} />
+        <EditSheet expense={editing} repeating={!!editing && isRepeating(editing)} now={now} onClose={() => setEditing(null)} onSave={save} onDelete={e => remove(e)} onSkip={skipThisMonth} accounts={accounts} onPhoto={setPhoto} />
       </>
     );
   }
@@ -343,7 +416,7 @@ export function App() {
       {/* Home leaves room for the add box docked above the bottom bar. */}
       <main className={`mx-auto max-w-xl px-4 ${tab === "home" ? "pb-[calc(13.5rem+env(safe-area-inset-bottom))]" : "pb-[calc(6.5rem+env(safe-area-inset-bottom))]"}`}>{body}</main>
       <nav aria-label={t.nav.label} data-hidden={typing} className="tabbar fixed inset-x-0 bottom-0 z-30 border-t border-line bg-card pb-[env(safe-area-inset-bottom)]">
-        <ul className="mx-auto grid max-w-xl grid-cols-4">
+        <ul className="mx-auto grid max-w-xl grid-cols-5">
           {TABS.map(k => (
             <li key={k}>
               <button type="button" onClick={() => go(k)} aria-current={tab === k ? "page" : undefined} data-tab={k}

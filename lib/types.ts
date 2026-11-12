@@ -15,6 +15,10 @@ export interface Expense {
   repeatId?: string;
   /** Tax section chosen by the person; when absent, lib/tax.ts suggests one from the category and note. */
   tax?: TaxTag;
+  /** Which account (cash, bank, card) the money went from or into. */
+  accountId?: string;
+  /** A photo of the receipt is kept for this entry (photos store, keyed by the entry id). */
+  photo?: boolean;
 }
 
 /** "Every month": copies an entry onto the same day each month (the last day in shorter months). */
@@ -29,5 +33,9 @@ export interface Repeat {
   createdAt: string;
 }
 export type CategoryLimits = Partial<Record<SpendCategory, number>>;
-export interface Settings { monthlyLimitPaise: number | null; lastBackupAt: string | null; categoryLimits: CategoryLimits; seniorSelf: boolean; seniorParents: boolean }
-export const DEFAULT_SETTINGS: Settings = { monthlyLimitPaise: null, lastBackupAt: null, categoryLimits: {}, seniorSelf: false, seniorParents: false };
+export interface Settings {
+  monthlyLimitPaise: number | null; lastBackupAt: string | null; categoryLimits: CategoryLimits; seniorSelf: boolean; seniorParents: boolean;
+  /** Accounts new entries use: UPI payments → upiAccount, cash → cashAccount. */
+  upiAccount: string | null; cashAccount: string | null;
+}
+export const DEFAULT_SETTINGS: Settings = { monthlyLimitPaise: null, lastBackupAt: null, categoryLimits: {}, seniorSelf: false, seniorParents: false, upiAccount: null, cashAccount: null };

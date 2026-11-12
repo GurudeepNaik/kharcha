@@ -7,6 +7,8 @@ import { parseDebt, type Direction } from "@/lib/debts";
 import { useI18n } from "@/lib/i18n";
 import { rupees } from "@/lib/money";
 import { parseEntry, type Method, type Parsed } from "@/lib/parse";
+import type { Settings } from "@/lib/types";
+import type { Account } from "@/lib/wealth";
 
 export interface DebtInput { person: string; dir: Direction; amountPaise: number; date: string }
 export interface AddBoxHandle { fill: (text: string) => void; focus: () => void }
@@ -15,15 +17,18 @@ export const AddBox = forwardRef<AddBoxHandle, {
   now: string;
   learned: ReadonlyMap<string, Category>;
   typing: boolean;
-  onAdd: (p: Parsed, pickedCategory: boolean, everyMonth: boolean) => Promise<void>;
+  accounts: Account[];
+  settings: Settings;
+  onAdd: (p: Parsed, pickedCategory: boolean, everyMonth: boolean, accountId?: string | null) => Promise<void>;
   onDebt: (d: DebtInput) => Promise<void>;
-}>(function AddBox({ now, learned, typing, onAdd, onDebt }, ref) {
+}>(function AddBox({ now, learned, typing, accounts, settings, onAdd, onDebt }, ref) {
   const { t } = useI18n();
   const [text, setText] = useState("");
   const [cat, setCat] = useState<Category | null>(null);
   const [date, setDate] = useState<string | null>(null);
   const [method, setMethod] = useState<Method | null | undefined>(undefined);
   const [monthly, setMonthly] = useState(false);
+  const [account, setAccount] = useState<string | null | undefined>(undefined); // undefined: the default for UPI / cash
   const [tried, setTried] = useState(false);
   const [saving, setSaving] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -50,9 +55,10 @@ export const AddBox = forwardRef<AddBoxHandle, {
     }
     if (!value) { setTried(true); input.current?.focus(); return; }
     setSaving(true);
-    try { await onAdd(value, cat !== null && parsed.ok && cat !== parsed.value.category, monthly); reset(); } finally { setSaving(false); }
+    try { await onAdd(value, cat !== null && parsed.ok && cat !== parsed.value.category, monthly, account); reset(); } finally { setSaving(false); }
   }
-  function reset() { setText(""); setCat(null); setDate(null); setMethod(undefined); setMonthly(false); setTried(false); input.current?.focus(); }
+  function reset() { setText(""); setCat(null); setDate(null); setMethod(undefined); setMonthly(false); setAccount(undefined); setTried(false); input.current?.focus(); }
+  const shownAccount = value ? (account !== undefined ? account : value.method === "upi" ? settings.upiAccount : value.method === "cash" ? settings.cashAccount : null) : null;
 
   const error = tried
     ? debt && !debt.ok ? t.err[debt.code] : !parsed.ok ? t.err[text.trim() ? parsed.code : "empty"] : null
@@ -96,6 +102,15 @@ export const AddBox = forwardRef<AddBoxHandle, {
                 </button>
               ))}
               <button type="button" aria-pressed={monthly} onClick={() => setMonthly(v => !v)} className={pill}>{t.everyMonth}</button>
+              {accounts.length > 0 && (
+                <label className="chip">
+                  <span className="sr-only">{t.wealth.account}</span>
+                  <select value={shownAccount ?? ""} onChange={e => setAccount(e.target.value || null)} className="chip-select" data-testid="entry-account">
+                    <option value="">{t.wealth.noAccount}</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </label>
+              )}
             </div>
           ) : error ? (
             <p className="text-[14px] font-medium text-bad" role="alert">{error}</p>

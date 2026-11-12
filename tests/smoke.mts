@@ -37,6 +37,11 @@ async function enter(page: Page, line: string) {
   await page.keyboard.press("Backspace");
   await page.type("#entry", line);
 }
+/** Taps something like a person would: scrolled to the middle of the screen first, clear of toasts and the bottom bar. */
+async function tap(page: Page, sel: string) {
+  await page.$eval(sel, el => el.scrollIntoView({ block: "center" }));
+  await page.click(sel);
+}
 /** Taps a row like a person would: scrolled to the middle of the screen, clear of the add box and bottom bar. */
 async function openRow(page: Page, id: string) {
   await page.$eval(`button[data-id="${id}"]`, b => b.scrollIntoView({ block: "center" }));
@@ -454,11 +459,105 @@ ok("a damaged file is refused", (await text(fresh, "[role=alert]")).includes("da
   await p.evaluate(() => (document.querySelector("input[name=lang][value=kn]") as HTMLElement).click());
   await wait(300);
   ok("Kannada: bottom bar reads ಮುಖಪುಟ", (await text(p, "[data-tab=home]")) === "ಮುಖಪುಟ");
-  for (const tab of ["home", "month", "people", "settings"]) {
+  for (const tab of ["home", "month", "wealth", "people", "settings"]) {
     await p.evaluate((k: string) => (document.querySelector(`[data-tab=${k}]`) as HTMLElement).click(), tab); await wait(250);
   }
   ok("Kannada: no sideways scroll on any screen", await noOverflow(p));
   await p.close();
+}
+
+// ---------- Wealth: accounts, transfers, net worth, goals ----------
+{
+  const p = await phone();
+  const store = (name: string) => p.evaluate((n: string) => new Promise<{ id: string; [k: string]: unknown }[]>(res => { const r = indexedDB.open("expenses"); r.onsuccess = () => { const q = r.result.transaction(n).objectStore(n).getAll(); q.onsuccess = () => { res(q.result); r.result.close(); }; }; }), name);
+  await clickText(p, "Wealth", "nav button");
+  await p.waitForSelector("[data-testid=add-account]");
+  const addAccount = async (type: "bank" | "cash" | "card", name: string, rs: string) => {
+    await tap(p, "[data-testid=add-account]"); await p.waitForSelector("#a-name");
+    await p.evaluate((k: string) => (document.querySelector(`input[name=atype][value=${k}]`) as HTMLElement).click(), type);
+    await p.type("#a-name", name); await p.type("#a-open", rs);
+    await clickText(p, "Save", "dialog button"); await wait(300);
+  };
+  await addAccount("bank", "SBI", "50000");
+  await addAccount("cash", "Wallet", "2000");
+  await addAccount("card", "HDFC card", "3000");
+  const acs = await store("accounts");
+  ok("3 accounts saved (card stored as −₹3,000 owed)", acs.length === 3 && acs.find(a => a.name === "HDFC card")?.openingPaise === -300000);
+  const sbi = acs.find(a => a.name === "SBI")!.id, wallet = acs.find(a => a.name === "Wallet")!.id;
+  await p.select("[data-testid=upiAccount]", sbi); await p.select("[data-testid=cashAccount]", wallet); await wait(200);
+  ok("net worth = 50,000 + 2,000 − 3,000", (await text(p, "[data-testid=networth-total]")) === "₹49,000");
+  // An entry paid by UPI goes to the UPI account by itself.
+  await clickText(p, "Home", "nav button"); await p.waitForSelector("#entry");
+  await add(p, "auto 80 upi"); await add(p, "chai 20 cash");
+  const rws = await dbRows(p);
+  ok("UPI entry → SBI, cash entry → Wallet", rws.find(r => r.note === "auto")?.accountId === sbi && rws.find(r => r.note === "chai")?.accountId === wallet);
+  await clickText(p, "Wealth", "nav button"); await p.waitForSelector("[data-testid=accounts]");
+  ok("SBI balance ₹49,920", (await text(p, "[data-testid=accounts]")).includes("₹49,920"));
+  // Move ₹1,000 from SBI to the card (paying the bill): not spending.
+  await clickText(p, "Move money"); await p.waitForSelector("#m-amt");
+  await p.select("#m-from", sbi); await p.select("#m-to", acs.find(a => a.name === "HDFC card")!.id);
+  await p.type("#m-amt", "1000"); await clickText(p, "Save", "dialog button"); await wait(300);
+  ok("card now owes ₹2,000; SBI ₹48,920", (await text(p, "[data-testid=accounts]")).includes("You owe ₹2,000") && (await text(p, "[data-testid=accounts]")).includes("₹48,920"));
+  ok("moving money keeps net worth (₹48,900 after ₹100 spent)", (await text(p, "[data-testid=networth-total]")) === "₹48,900");
+  // What you own, and a loan.
+  for (const [kind, name, rs] of [["ppf", "PPF", "200000"], ["loan", "Bike loan", "40000"]] as const) {
+    await tap(p, "[data-testid=add-holding]"); await p.waitForSelector("#h-kind");
+    await p.select("#h-kind", kind); await p.type("#h-name", name); await p.type("#h-val", rs);
+    await clickText(p, "Save", "dialog button"); await wait(300);
+  }
+  ok("net worth = 48,900 + 2,00,000 − 40,000", (await text(p, "[data-testid=networth-total]")) === "₹2,08,900");
+  // A goal with a date: how much a month.
+  const d = new Date(); const by = new Date(d.getFullYear(), d.getMonth() + 7, 1);
+  await tap(p, "[data-testid=add-goal]"); await p.waitForSelector("#g-name");
+  await p.type("#g-name", "Bike"); await p.type("#g-target", "80000");
+  await p.$eval("#g-by", (el, v) => { const i = el as HTMLInputElement; const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!; set.call(i, v); i.dispatchEvent(new Event("input", { bubbles: true })); }, `${by.getFullYear()}-${String(by.getMonth() + 1).padStart(2, "0")}`);
+  await clickText(p, "Save", "dialog button"); await wait(300);
+  await clickText(p, "Add money"); await p.waitForSelector("#am"); await p.type("#am", "20000"); await clickText(p, "Save", "dialog button"); await wait(300);
+  ok("goal: ₹20,000 of ₹80,000 saved, ₹7,500 a month for 8 months", (await text(p, "[data-testid=goal-progress]")).includes("₹20,000 of ₹80,000 saved") && (await text(p, "[data-testid=goal-progress]")).includes("₹7,500 a month for 8 months"));
+  ok("Wealth: no sideways scroll at 390px", await noOverflow(p));
+
+  // ---------- Bank statement import ----------
+  await clickText(p, "Settings", "nav button"); await p.waitForSelector("[data-testid=statement-input]");
+  const before = (await dbRows(p)).length;
+  await (await p.$("[data-testid=statement-input]"))!.uploadFile(new URL("./statements/debit-credit.csv", import.meta.url).pathname);
+  await p.waitForSelector("[data-testid=import-found]");
+  ok("statement: 7 transactions found", (await text(p, "[data-testid=import-found]")).startsWith("7 transactions"));
+  const ticked = await p.$$eval("[data-testid=import-rows] input[type=checkbox]", xs => xs.filter(x => (x as HTMLInputElement).checked).length);
+  ok(`ATM cash and the card bill come unticked (${ticked} of 7 ticked)`, ticked === 5);
+  await tap(p, "[data-testid=import-go]"); await wait(500);
+  const after = await dbRows(p);
+  ok(`import adds exactly the ticked rows (${after.length - before})`, after.length - before === ticked);
+  ok("imported salary is money in, Swiggy is Food", after.some(r => r.note === "salary" && r.category === "salary" && r.date === "2026-11-01") && after.some(r => r.note === "Swiggy" && r.category === "food"));
+  await clickText(p, "Undo"); await wait(500);
+  ok("Undo removes the whole import", (await dbRows(p)).length === before);
+
+  // ---------- Receipt photo on an entry ----------
+  await clickText(p, "Home", "nav button"); await p.waitForSelector("#entry");
+  const chai = (await dbRows(p)).find(r => r.note === "chai")!;
+  await openRow(p, chai.id);
+  await (await p.$("[data-testid=photo-input]"))!.uploadFile(new URL("../public/icon-512.png", import.meta.url).pathname);
+  await p.waitForSelector("[data-testid=photo] img", { timeout: 5000 }).catch(() => undefined);
+  ok("photo attaches to the entry", (await dbRows(p)).find(r => r.id === chai.id)?.photo === true && (await store("photos")).length === 1);
+  const jpeg = await p.evaluate(() => new Promise<string>(res => { const r = indexedDB.open("expenses"); r.onsuccess = () => { const q = r.result.transaction("photos").objectStore("photos").getAll(); q.onsuccess = () => res(`${q.result[0].blob.type} ${q.result[0].blob.size}`); }; }));
+  ok(`photo saved as a small JPEG (${jpeg})`, /^image\/jpeg \d+$/.test(jpeg) && Number(jpeg.split(" ")[1]) < 300_000);
+  await clickText(p, "Remove photo"); await wait(300);
+  ok("Remove photo deletes it", !(await dbRows(p)).find(r => r.id === chai.id)?.photo && (await store("photos")).length === 0);
+  await p.keyboard.press("Escape");
+
+  // ---------- Notes and the year ----------
+  await clickText(p, "Month", "nav button"); await p.waitForSelector("[data-testid=mode-year]");
+  await p.click("[data-testid=mode-year]"); await p.waitForSelector("[data-testid=year]");
+  const yr = String(new Date().getFullYear());
+  const ySpent = (await dbRows(p)).filter(r => r.date.startsWith(yr) && !INCOME.has(r.category) && !INVEST.has(r.category)).reduce((s2, r) => s2 + r.amountPaise, 0);
+  ok(`year in review: spent = this year's spends (${ySpent / 100})`, paise(await text(p, "[data-testid=year-spent]")) === ySpent);
+  ok("Year: no sideways scroll", await noOverflow(p));
+  await p.close();
+}
+{
+  // Notes need a few entries: the first browser's data has them.
+  await clickText(page, "Month", "nav button"); await page.waitForSelector("[data-testid=mode-month]");
+  ok("Month shows Notes (a repeat is on)", (await text(page, "[data-testid=notes]")).includes("goes out every month"));
+  await clickText(page, "Home", "nav button"); await page.waitForSelector("#entry");
 }
 
 // ---------- Phone widths, keyboard ----------
@@ -468,6 +567,8 @@ for (const w of [320, 390]) {
   ok(`${w}px: no sideways scroll on Home`, await noOverflow(p));
   await clickText(p, "Month", "nav button"); await wait(200);
   ok(`${w}px: no sideways scroll on Month`, await noOverflow(p));
+  await clickText(p, "Wealth", "nav button"); await wait(200);
+  ok(`${w}px: no sideways scroll on Wealth`, await noOverflow(p));
   await clickText(p, "People", "nav button"); await wait(200);
   ok(`${w}px: no sideways scroll on People`, await noOverflow(p));
   await clickText(p, "Settings", "nav button"); await wait(200);

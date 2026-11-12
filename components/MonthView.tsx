@@ -9,16 +9,38 @@ import { monthText, useI18n } from "@/lib/i18n";
 import { rupees } from "@/lib/money";
 import { byCategory, incomes, inMonth, invests, spends, sum } from "@/lib/totals";
 import { dailySpend, monthTotals, vsLastMonth } from "@/lib/trends";
-import type { Expense, Settings } from "@/lib/types";
+import type { Expense, Repeat, Settings } from "@/lib/types";
+import { insights, type Insight } from "@/lib/insights";
+import { dateText } from "@/lib/i18n";
 import { BarChart } from "./BarChart";
 import { LimitLine } from "./LimitLine";
 import { TaxCard } from "./TaxCard";
 import { Icon, SpendRow, Svg, card } from "./ui";
+import { YearView } from "./YearView";
 
-export function MonthView({ rows, now, settings, onOpen, isRepeating, onSettings }: {
-  rows: Expense[]; now: string; settings: Settings; onOpen: (e: Expense) => void; isRepeating: (e: Expense) => boolean;
+type Props = {
+  rows: Expense[]; now: string; settings: Settings; repeats: Repeat[]; onOpen: (e: Expense) => void; isRepeating: (e: Expense) => boolean;
   onSettings: (s: Partial<Settings>) => Promise<void>;
-}) {
+};
+
+/** Month or Year, switched at the top. */
+export function MonthView(props: Props) {
+  const { t } = useI18n();
+  const [mode, setMode] = useState<"month" | "year">("month");
+  return (
+    <div className="space-y-4">
+      <div role="radiogroup" aria-label={`${t.year.month} / ${t.year.year}`} className="mx-auto grid max-w-xs grid-cols-2 rounded-full border border-line bg-card p-1">
+        {(["month", "year"] as const).map(m => (
+          <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => setMode(m)} data-testid={`mode-${m}`}
+            className="press min-h-10 rounded-full text-[14px] font-semibold text-muted aria-checked:bg-accent aria-checked:text-accent-fg">{m === "month" ? t.year.month : t.year.year}</button>
+        ))}
+      </div>
+      {mode === "month" ? <MonthBody {...props} /> : <YearView rows={props.rows} now={props.now} />}
+    </div>
+  );
+}
+
+function MonthBody({ rows, now, settings, repeats, onOpen, isRepeating, onSettings }: Props) {
   const i = useI18n();
   const { t } = i;
   const current = monthOf(now);
@@ -41,6 +63,17 @@ export function MonthView({ rows, now, settings, onOpen, isRepeating, onSettings
   const daily = dailySpend(rows, month, now);
   const six = monthTotals(rows, month, 6);
   const isCurrent = month === current;
+  const notes = insights(rows, month, now, repeats, settings.monthlyLimitPaise);
+  const noteText = (n: Insight): string => {
+    switch (n.kind) {
+      case "catUp": return t.notes.catUp(t.cat[n.category], n.pct, n.now, n.then);
+      case "catDown": return t.notes.catDown(t.cat[n.category], n.pct, n.now, n.then);
+      case "often": return t.notes.often(n.note, n.count, n.paise);
+      case "repeats": return t.notes.repeats(n.count, n.paise);
+      case "pace": return n.limit && n.projected > n.limit ? t.notes.paceOver(n.projected, n.limit) : t.notes.pace(n.projected);
+      case "biggest": return t.notes.biggest(n.note || t.cat[n.category], n.paise, dateText(n.date, i));
+    }
+  };
 
   const go = (n: number) => { setMonth(m => addMonths(m, n)); setOpen(null); };
   const name = monthText(month, i);
@@ -80,6 +113,19 @@ export function MonthView({ rows, now, settings, onOpen, isRepeating, onSettings
         )}
         {isCurrent && settings.monthlyLimitPaise && <LimitLine spent={total} limit={settings.monthlyLimitPaise} month={month} now={now} />}
       </div>
+
+      {notes.length > 0 && (
+        <section aria-labelledby="notes-title" className={`${card} p-4`} data-testid="notes">
+          <h2 id="notes-title" className="font-semibold">{t.notes.title}</h2>
+          <ul className="mt-1.5 space-y-1.5 text-[14px]">
+            {notes.map((n, k) => (
+              <li key={k} className={`num flex gap-2 ${n.kind === "pace" && n.limit && n.projected > n.limit ? "font-medium text-bad" : ""}`}>
+                <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-accent" />{noteText(n)}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {total > 0 && (
         <BarChart testid="daily-chart" title={t.month.daily} labelEvery={5} height={96}

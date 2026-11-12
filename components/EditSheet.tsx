@@ -1,7 +1,9 @@
 "use client";
 
 // Change or delete one entry.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getPhoto } from "@/lib/store";
+import type { Account } from "@/lib/wealth";
 import { useI18n } from "@/lib/i18n";
 import { TAX_TAGS, suggestTax, type TaxTag } from "@/lib/tax";
 import { CATEGORIES, type Category } from "@/lib/categories";
@@ -13,7 +15,7 @@ import { Sheet, SheetHead } from "./ui";
 type SaveFn = (e: Expense, categoryChanged: boolean, everyMonth: boolean) => Promise<void>;
 type SkipFn = (e: Expense) => Promise<void>;
 
-export function EditSheet({ expense, repeating, now, onClose, onSave, onDelete, onSkip }: {
+export function EditSheet({ expense, repeating, now, onClose, onSave, onDelete, onSkip, accounts, onPhoto }: {
   expense: Expense | null;
   /** This entry's monthly repeat is still on. */
   repeating: boolean;
@@ -22,20 +24,24 @@ export function EditSheet({ expense, repeating, now, onClose, onSave, onDelete, 
   onSave: SaveFn;
   onDelete: (e: Expense) => Promise<void>;
   onSkip: SkipFn;
+  accounts: Account[];
+  onPhoto: (e: Expense, file: Blob | null) => Promise<void>;
 }) {
   const { t } = useI18n();
   return (
     <Sheet open={!!expense} onClose={onClose} label={t.edit.title}>
-      {expense && <Form key={expense.id} e={expense} repeating={repeating} now={now} onClose={onClose} onSave={onSave} onDelete={onDelete} onSkip={onSkip} />}
+      {expense && <Form key={expense.id} e={expense} repeating={repeating} now={now} onClose={onClose} onSave={onSave} onDelete={onDelete} onSkip={onSkip} accounts={accounts} onPhoto={onPhoto} />}
     </Sheet>
   );
 }
 
-function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip }: {
+function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip, accounts, onPhoto }: {
   e: Expense; repeating: boolean; now: string; onClose: () => void;
   onSave: SaveFn;
   onDelete: (e: Expense) => Promise<void>;
   onSkip: SkipFn;
+  accounts: Account[];
+  onPhoto: (e: Expense, file: Blob | null) => Promise<void>;
 }) {
   const { t } = useI18n();
   const [amount, setAmount] = useState(plainAmount(e.amountPaise));
@@ -45,6 +51,16 @@ function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip }: {
   const [method, setMethod] = useState<Method | null>(e.method);
   const [monthly, setMonthly] = useState(repeating);
   const [tax, setTax] = useState<TaxTag | "">(e.tax ?? "");
+  const [account, setAccount] = useState(e.accountId ?? "");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [viewing, setViewing] = useState(false);
+  const photoInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    let url: string | null = null, live = true;
+    if (e.photo) void getPhoto(e.id).then(b => { if (b && live) { url = URL.createObjectURL(b); setPhotoUrl(url); } });
+    else setPhotoUrl(null);
+    return () => { live = false; if (url) URL.revokeObjectURL(url); };
+  }, [e.id, e.photo]);
   const [error, setError] = useState<{ field: "amount" | "date"; text: string } | null>(null);
 
   async function submit(ev: React.FormEvent) {
@@ -54,6 +70,7 @@ function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip }: {
     if (!date || date > now) { setError({ field: "date", text: t.err.pickDate }); return; }
     const next: Expense = { ...e, amountPaise: a.paise, note: note.trim().slice(0, 60), category, date, method, updatedAt: new Date().toISOString() };
     if (tax) next.tax = tax; else delete next.tax;
+    if (account) next.accountId = account; else delete next.accountId;
     await onSave(next, category !== e.category, monthly);
   }
 
@@ -120,6 +137,40 @@ function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip }: {
           <span className="block text-[13px] text-muted">{t.edit.everyHint(Number(date.slice(8)) || "–")}</span>
         </span>
       </label>
+
+      {accounts.length > 0 && (
+        <>
+          <label htmlFor="edit-account" className="mt-3 mb-1 block text-sm font-medium">{t.wealth.account}</label>
+          <select id="edit-account" value={account} onChange={x => setAccount(x.target.value)} className="field">
+            <option value="">{t.wealth.noAccount}</option>
+            {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </>
+      )}
+
+      <div className="mt-3 flex items-center gap-3" data-testid="photo">
+        {photoUrl ? (
+          <>
+            <button type="button" onClick={() => setViewing(true)} className="press shrink-0 overflow-hidden rounded-lg border border-line" aria-label={t.photo.view}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photoUrl} alt={t.photo.alt} className="h-16 w-12 object-cover object-top" />
+            </button>
+            <button type="button" onClick={() => setViewing(true)} className="press min-h-11 rounded-xl border border-line px-3 text-[14px] font-semibold">{t.photo.view}</button>
+            <button type="button" onClick={() => void onPhoto(e, null)} className="press min-h-11 rounded-xl px-3 text-[14px] font-semibold text-bad">{t.photo.remove}</button>
+          </>
+        ) : (
+          <button type="button" onClick={() => photoInput.current?.click()} className="press min-h-11 rounded-xl border border-line px-3 text-[14px] font-semibold">{t.photo.add}</button>
+        )}
+        <input ref={photoInput} type="file" accept="image/*" className="hidden" aria-hidden tabIndex={-1} data-testid="photo-input"
+          onChange={x => { const f = x.target.files?.[0]; x.target.value = ""; if (f) void onPhoto({ ...e, amountPaise: e.amountPaise }, f); }} />
+      </div>
+      {viewing && photoUrl && (
+        <div role="dialog" aria-label={t.photo.alt} className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-3" onClick={() => setViewing(false)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={photoUrl} alt={t.photo.alt} className="max-h-full max-w-full rounded-lg" />
+          <button type="button" onClick={() => setViewing(false)} className="press absolute top-[max(0.75rem,env(safe-area-inset-top))] right-3 min-h-11 rounded-full bg-white px-4 font-semibold text-black">{t.close}</button>
+        </div>
+      )}
 
       {repeating && (
         <button type="button" onClick={() => void onSkip(e)} data-testid="skip-this"

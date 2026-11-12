@@ -4,6 +4,7 @@ import type { Category } from "./categories";
 import { sortRows } from "./totals";
 import type { Debt } from "./debts";
 import { DEFAULT_SETTINGS, type CategoryLimits, type Expense, type Repeat, type Settings } from "./types";
+import type { Account, Goal, Holding, Transfer } from "./wealth";
 
 interface Schema extends DBSchema {
   expenses: { key: string; value: Expense; indexes: { date: string } };
@@ -11,12 +12,17 @@ interface Schema extends DBSchema {
   settings: { key: string; value: unknown };
   repeats: { key: string; value: Repeat };
   debts: { key: string; value: Debt };
+  accounts: { key: string; value: Account };
+  transfers: { key: string; value: Transfer };
+  holdings: { key: string; value: Holding };
+  goals: { key: string; value: Goal };
+  photos: { key: string; value: { id: string; blob: Blob } };
 }
 
 let dbp: Promise<IDBPDatabase<Schema>> | null = null;
 function db() {
   // The database name stays neutral so the app can be renamed without losing anyone's data.
-  dbp ??= openDB<Schema>("expenses", 3, {
+  dbp ??= openDB<Schema>("expenses", 4, {
     upgrade(d, old) {
       if (old < 1) {
         d.createObjectStore("expenses", { keyPath: "id" }).createIndex("date", "date");
@@ -25,6 +31,9 @@ function db() {
       }
       if (old < 2) d.createObjectStore("repeats", { keyPath: "id" }); // monthly repeats (v2)
       if (old < 3) d.createObjectStore("debts", { keyPath: "id" }); // lent and borrowed (v3)
+      if (old < 4) { // accounts, transfers, net worth, goals, receipt photos (v4)
+        for (const n of ["accounts", "transfers", "holdings", "goals", "photos"] as const) d.createObjectStore(n, { keyPath: "id" });
+      }
     },
     // Another tab opened a newer version: step aside so it can upgrade; the next call here reopens.
     blocking() { void dbp?.then(x => x.close()); dbp = null; },
@@ -56,13 +65,15 @@ export async function learn(word: string, category: Category) { await (await db(
 
 export async function getSettings(): Promise<Settings> {
   const d = await db();
-  const [limit, last, cats, ss, sp] = await Promise.all(["monthlyLimitPaise", "lastBackupAt", "categoryLimits", "seniorSelf", "seniorParents"].map(k => d.get("settings", k)));
+  const [limit, last, cats, ss, sp, ua, ca] = await Promise.all(["monthlyLimitPaise", "lastBackupAt", "categoryLimits", "seniorSelf", "seniorParents", "upiAccount", "cashAccount"].map(k => d.get("settings", k)));
   return {
     monthlyLimitPaise: typeof limit === "number" ? limit : DEFAULT_SETTINGS.monthlyLimitPaise,
     lastBackupAt: typeof last === "string" ? last : DEFAULT_SETTINGS.lastBackupAt,
     categoryLimits: cats && typeof cats === "object" ? (cats as CategoryLimits) : {},
     seniorSelf: ss === true,
     seniorParents: sp === true,
+    upiAccount: typeof ua === "string" ? ua : null,
+    cashAccount: typeof ca === "string" ? ca : null,
   };
 }
 export async function saveSettings(s: Partial<Settings>) {
@@ -100,9 +111,29 @@ export async function allDebts(): Promise<Debt[]> { return (await db()).getAll("
 export async function putDebt(x: Debt) { await (await db()).put("debts", x); }
 export async function deleteDebt(id: string) { await (await db()).delete("debts", id); }
 
+// Accounts, transfers, holdings, goals: small lists, read whole and written one at a time.
+type ListStore = "accounts" | "transfers" | "holdings" | "goals";
+export async function all<S extends ListStore>(s: S): Promise<Schema[S]["value"][]> { return (await db()).getAll(s); }
+export async function put<S extends ListStore>(s: S, v: Schema[S]["value"]) { await (await db()).put(s, v); }
+export async function del(s: ListStore, id: string) { await (await db()).delete(s, id); }
+
+export async function getPhoto(id: string): Promise<Blob | null> { return (await (await db()).get("photos", id))?.blob ?? null; }
+export async function putPhoto(id: string, blob: Blob) { await (await db()).put("photos", { id, blob }); }
+export async function deletePhoto(id: string) { await (await db()).delete("photos", id); }
+export async function allPhotos() { return (await db()).getAll("photos"); }
+
 /** Writes a restore in one transaction: either every row lands or none do. */
-export async function applyRestore(rows: Expense[], learned: { word: string; category: Category }[], repeats: Repeat[] = [], debts: Debt[] = []) {
-  const tx = (await db()).transaction(["expenses", "learned", "repeats", "debts"], "readwrite");
+export interface RestoreExtra { accounts?: Account[]; transfers?: Transfer[]; holdings?: Holding[]; goals?: Goal[]; photos?: { id: string; blob: Blob }[] }
+export async function applyRestore(rows: Expense[], learned: { word: string; category: Category }[], repeats: Repeat[] = [], debts: Debt[] = [], extra: RestoreExtra = {}) {
+  const tx = (await db()).transaction(["expenses", "learned", "repeats", "debts", "accounts", "transfers", "holdings", "goals", "photos"], "readwrite");
+  // Newer copy wins for anything with updatedAt; photos are added when missing.
+  for (const s of ["accounts", "transfers", "holdings", "goals"] as const) {
+    for (const x of (extra[s] ?? []) as { id: string; updatedAt: string }[]) {
+      const cur = (await tx.objectStore(s).get(x.id)) as { updatedAt: string } | undefined;
+      if (!cur || cur.updatedAt < x.updatedAt) await tx.objectStore(s).put(x as never);
+    }
+  }
+  for (const p of extra.photos ?? []) if (!(await tx.objectStore("photos").get(p.id))) await tx.objectStore("photos").put(p);
   for (const x of debts) {
     const cur = await tx.objectStore("debts").get(x.id);
     if (!cur || cur.updatedAt < x.updatedAt) await tx.objectStore("debts").put(x);
@@ -119,5 +150,5 @@ export async function applyRestore(rows: Expense[], learned: { word: string; cat
 /** For tests only. */
 export async function _wipe() {
   const d = await db();
-  await Promise.all([d.clear("expenses"), d.clear("learned"), d.clear("settings"), d.clear("repeats"), d.clear("debts")]);
+  await Promise.all([d.clear("expenses"), d.clear("learned"), d.clear("settings"), d.clear("repeats"), d.clear("debts"), ...(["accounts", "transfers", "holdings", "goals", "photos"] as const).map(n => d.clear(n))]);
 }

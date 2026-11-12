@@ -12,6 +12,11 @@ import { readRupees, rupees } from "@/lib/money";
 import { nextDate } from "@/lib/repeat";
 import type { CategoryLimits, Expense, Repeat, Settings } from "@/lib/types";
 import { Sheet, SheetHead, btnLine, btnPrimary, card } from "./ui";
+import { ImportCard } from "./ImportCard";
+import type { ImportItem } from "@/lib/statement";
+import type { BackupExtra } from "@/lib/backup";
+import { allPhotos } from "@/lib/store";
+import { blobToBase64 } from "@/lib/image";
 
 export type Plan = { backup: Backup; add: Expense[]; update: Expense[]; unchanged: number };
 
@@ -25,11 +30,13 @@ function download(name: string, blob: Blob) {
 
 const SPEND_CATS = CATEGORIES.filter(c => c.kind === "spend").map(c => c.key as SpendCategory);
 
-export function SettingsView({ rows, learned, repeats, debts, settings, persisted, now, onSettings, onStopRepeat, onSkipRepeat, onRestore, say }: {
+export function SettingsView({ rows, learned, repeats, debts, settings, persisted, now, extra, onImport, onSettings, onStopRepeat, onSkipRepeat, onRestore, say }: {
   rows: Expense[];
   learned: Map<string, Category>;
   repeats: Repeat[];
   debts: Debt[];
+  extra: Required<Omit<BackupExtra, "photos">>;
+  onImport: (items: ImportItem[], accountId: string | null) => Promise<void>;
   settings: Settings;
   persisted: boolean;
   now: string;
@@ -48,6 +55,8 @@ export function SettingsView({ rows, learned, repeats, debts, settings, persiste
   const [plan, setPlan] = useState<Plan | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [canShare, setCanShare] = useState(false);
+  const [withPhotos, setWithPhotos] = useState(false);
+  const photoCount = rows.filter(e => e.photo).length;
   const fileInput = useRef<HTMLInputElement>(null);
   const base = APP_NAME.toLowerCase();
 
@@ -80,12 +89,13 @@ export function SettingsView({ rows, learned, repeats, debts, settings, persiste
     say(t.toast.budgets);
   }
 
-  function backupFile() {
-    return new File([JSON.stringify(makeBackup(rows, learned, settings, repeats, debts))], `${base}-backup-${today()}.json`, { type: "application/json" });
+  async function backupFile() {
+    const photos = withPhotos ? await Promise.all((await allPhotos()).map(async p => ({ id: p.id, type: p.blob.type || "image/jpeg", data: await blobToBase64(p.blob) }))) : [];
+    return new File([JSON.stringify(makeBackup(rows, learned, settings, repeats, debts, { ...extra, photos }))], `${base}-backup-${today()}.json`, { type: "application/json" });
   }
   async function share() {
     try {
-      await navigator.share({ files: [backupFile()], title: `${APP_NAME} backup` });
+      await navigator.share({ files: [await backupFile()], title: `${APP_NAME} backup` });
       await onSettings({ lastBackupAt: new Date().toISOString() });
       say(t.toast.shared);
     } catch (err) {
@@ -93,7 +103,7 @@ export function SettingsView({ rows, learned, repeats, debts, settings, persiste
     }
   }
   async function saveFile() {
-    const f = backupFile();
+    const f = await backupFile();
     download(f.name, f);
     await onSettings({ lastBackupAt: new Date().toISOString() });
     say(t.toast.backupSaved);
@@ -111,7 +121,7 @@ export function SettingsView({ rows, learned, repeats, debts, settings, persiste
   }
 
   const total = rows.length + debts.length;
-  const nothing = (p: Plan) => !p.add.length && !p.update.length && !p.backup.debts.length && !p.backup.repeats.length;
+  const nothing = (p: Plan) => !p.add.length && !p.update.length && ![p.backup.debts, p.backup.repeats, p.backup.accounts, p.backup.transfers, p.backup.holdings, p.backup.goals, p.backup.photos].some(x => x.length);
 
   return (
     <section aria-labelledby="settings-title" className="space-y-4">
@@ -188,6 +198,8 @@ export function SettingsView({ rows, learned, repeats, debts, settings, persiste
         )}
       </div>
 
+      <ImportCard rows={rows} learned={learned} accounts={extra.accounts} onImport={onImport} />
+
       <div className={`${card} p-4`}>
         <h2 className="font-semibold">{t.settings.backup}</h2>
         <p className="mt-0.5 text-sm text-muted">
@@ -199,6 +211,12 @@ export function SettingsView({ rows, learned, repeats, debts, settings, persiste
           <button type="button" onClick={() => fileInput.current?.click()} className={btnLine}>{t.settings.restore}</button>
           <input ref={fileInput} type="file" accept="application/json,.json" onChange={e => void pick(e)} className="hidden" aria-hidden tabIndex={-1} data-testid="restore-input" />
         </div>
+        {photoCount > 0 && (
+          <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2 text-[14px]">
+            <input type="checkbox" checked={withPhotos} onChange={e => setWithPhotos(e.target.checked)} className="size-5 accent-[var(--accent)]" data-testid="backup-photos" />
+            {t.photo.include}
+          </label>
+        )}
         {fileError && <p role="alert" className="mt-2 text-sm font-medium text-bad" data-testid="file-error">{fileError}</p>}
         <p className="mt-3 text-[13px] text-muted">{persisted ? t.settings.persisted : t.settings.notPersisted}</p>
       </div>

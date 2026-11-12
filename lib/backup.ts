@@ -3,12 +3,13 @@ import { isCategory, isSpendCategory, kindOf, categoryLabel, type Category } fro
 import { validDate } from "./dates";
 import { MAX_PAISE, plainAmount } from "./money";
 import type { Debt } from "./debts";
+import { HOLDING_KINDS, type Account, type Goal, type Holding, type Transfer } from "./wealth";
 import { isTaxTag } from "./tax";
 import type { CategoryLimits, Expense, Repeat, Settings } from "./types";
 
 export const BACKUP_KIND = "expense-tracker-backup";
-export const BACKUP_VERSION = 3; // 2: money in, monthly repeats. 3: lent/borrowed, category budgets. Older files still restore.
-export const MAX_BACKUP_BYTES = 20 * 1024 * 1024;
+export const BACKUP_VERSION = 4; // 2: money in, repeats. 3: lending, budgets. 4: accounts, transfers, net worth, goals, photos. Older files still restore.
+export const MAX_BACKUP_BYTES = 200 * 1024 * 1024; // receipt photos make backups bigger
 const MAX_ROWS = 200_000;
 
 export interface Backup {
@@ -19,15 +20,68 @@ export interface Backup {
   learned: { word: string; category: Category }[];
   repeats: Repeat[];
   debts: Debt[];
-  settings: Pick<Settings, "monthlyLimitPaise" | "categoryLimits" | "seniorSelf" | "seniorParents">;
+  accounts: Account[]; transfers: Transfer[]; holdings: Holding[]; goals: Goal[];
+  /** Receipt photos, only when the person chose to include them: base64 JPEG/PNG/WebP. */
+  photos: { id: string; type: string; data: string }[];
+  settings: Pick<Settings, "monthlyLimitPaise" | "categoryLimits" | "seniorSelf" | "seniorParents" | "upiAccount" | "cashAccount">;
 }
 
-export function makeBackup(expenses: Expense[], learned: Map<string, Category>, settings: Settings, repeats: Repeat[] = [], debts: Debt[] = [], now = new Date()): Backup {
+export interface BackupExtra { accounts?: Account[]; transfers?: Transfer[]; holdings?: Holding[]; goals?: Goal[]; photos?: { id: string; type: string; data: string }[] }
+
+export function makeBackup(expenses: Expense[], learned: Map<string, Category>, settings: Settings, repeats: Repeat[] = [], debts: Debt[] = [], extra: BackupExtra = {}, now = new Date()): Backup {
   return {
     kind: BACKUP_KIND, version: BACKUP_VERSION, exportedAt: now.toISOString(), expenses, repeats, debts,
+    accounts: extra.accounts ?? [], transfers: extra.transfers ?? [], holdings: extra.holdings ?? [], goals: extra.goals ?? [], photos: extra.photos ?? [],
     learned: [...learned].map(([word, category]) => ({ word, category })),
-    settings: { monthlyLimitPaise: settings.monthlyLimitPaise, categoryLimits: settings.categoryLimits, seniorSelf: settings.seniorSelf, seniorParents: settings.seniorParents },
+    settings: {
+      monthlyLimitPaise: settings.monthlyLimitPaise, categoryLimits: settings.categoryLimits, seniorSelf: settings.seniorSelf, seniorParents: settings.seniorParents,
+      upiAccount: settings.upiAccount, cashAccount: settings.cashAccount,
+    },
   };
+}
+
+const str = (v: unknown, max: number) => typeof v === "string" && v.trim().length > 0 && v.length <= max;
+const paise = (v: unknown, min = 1) => typeof v === "number" && Number.isInteger(v) && v >= min && v <= MAX_PAISE;
+const ymd = (v: unknown) => { if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false; const [y, m, d] = v.split("-").map(Number) as [number, number, number]; return validDate(y, m, d) === v; };
+const stamps = (o: Record<string, unknown>) => typeof o.createdAt === "string" && ISO.test(o.createdAt) && typeof o.updatedAt === "string" && ISO.test(o.updatedAt);
+const obj = (x: unknown) => (x && typeof x === "object" ? (x as Record<string, unknown>) : null);
+
+function validAccount(x: unknown): Account | null {
+  const o = obj(x); if (!o) return null;
+  if (!str(o.id, 64) || !ID.test(o.id as string) || !str(o.name, 40) || !["cash", "bank", "card"].includes(o.type as string)) return null;
+  if (!(typeof o.openingPaise === "number" && Number.isInteger(o.openingPaise) && Math.abs(o.openingPaise) <= MAX_PAISE * 100) || !ymd(o.openingDate) || !stamps(o)) return null;
+  return { id: o.id as string, name: o.name as string, type: o.type as Account["type"], openingPaise: o.openingPaise, openingDate: o.openingDate as string, createdAt: o.createdAt as string, updatedAt: o.updatedAt as string };
+}
+function validTransfer(x: unknown): Transfer | null {
+  const o = obj(x); if (!o) return null;
+  if (![o.id, o.from, o.to].every(v => typeof v === "string" && ID.test(v)) || o.from === o.to || !paise(o.amountPaise) || !ymd(o.date) || typeof o.note !== "string" || o.note.length > 60 || !stamps(o)) return null;
+  return { id: o.id as string, from: o.from as string, to: o.to as string, amountPaise: o.amountPaise as number, date: o.date as string, note: o.note, createdAt: o.createdAt as string, updatedAt: o.updatedAt as string };
+}
+function validHolding(x: unknown): Holding | null {
+  const o = obj(x); if (!o) return null;
+  if (!str(o.id, 64) || !ID.test(o.id as string) || !str(o.name, 40) || !HOLDING_KINDS.includes(o.kind as Holding["kind"]) || !paise(o.valuePaise, 0) || !stamps(o)) return null;
+  return { id: o.id as string, name: o.name as string, kind: o.kind as Holding["kind"], valuePaise: o.valuePaise as number, createdAt: o.createdAt as string, updatedAt: o.updatedAt as string };
+}
+function validGoal(x: unknown): Goal | null {
+  const o = obj(x); if (!o) return null;
+  if (!str(o.id, 64) || !ID.test(o.id as string) || !str(o.name, 40) || !paise(o.targetPaise) || !stamps(o)) return null;
+  if (!(o.byMonth === null || (typeof o.byMonth === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(o.byMonth)))) return null;
+  if (!Array.isArray(o.added) || o.added.length > 5000) return null;
+  const added: Goal["added"] = [];
+  for (const a of o.added) { const r = obj(a); if (!r || !ymd(r.date) || !(typeof r.paise === "number" && Number.isInteger(r.paise) && Math.abs(r.paise) <= MAX_PAISE)) return null; added.push({ date: r.date as string, paise: r.paise }); }
+  return { id: o.id as string, name: o.name as string, targetPaise: o.targetPaise as number, byMonth: o.byMonth as string | null, added, createdAt: o.createdAt as string, updatedAt: o.updatedAt as string };
+}
+function validPhoto(x: unknown): { id: string; type: string; data: string } | null {
+  const o = obj(x); if (!o) return null;
+  if (typeof o.id !== "string" || !ID.test(o.id) || !["image/jpeg", "image/png", "image/webp"].includes(o.type as string) || typeof o.data !== "string" || !/^[A-Za-z0-9+/=]+$/.test(o.data) || o.data.length > 8_000_000) return null;
+  return { id: o.id, type: o.type as string, data: o.data };
+}
+function list<T>(v: unknown, check: (x: unknown) => T | null, max = MAX_ROWS): T[] | null {
+  if (v === undefined) return [];
+  if (!Array.isArray(v) || v.length > max) return null;
+  const out: T[] = [];
+  for (const x of v) { const r = check(x); if (!r) return null; out.push(r); }
+  return out;
 }
 
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
@@ -49,6 +103,8 @@ function validExpense(x: unknown): Expense | null {
   const out: Expense = { id: e.id, amountPaise: e.amountPaise, note: e.note, category: e.category, method: e.method, date: e.date, createdAt: e.createdAt, updatedAt: e.updatedAt };
   if (e.repeatId !== undefined) out.repeatId = e.repeatId;
   if (e.tax !== undefined) { if (!isTaxTag(e.tax)) return null; out.tax = e.tax; }
+  if (e.accountId !== undefined) { if (typeof e.accountId !== "string" || !ID.test(e.accountId)) return null; out.accountId = e.accountId; }
+  if (e.photo !== undefined) { if (e.photo !== true) return null; out.photo = true; }
   return out;
 }
 
@@ -109,7 +165,11 @@ export function readBackup(text: string): { ok: true; value: Backup } | { ok: fa
     if (!Array.isArray(b.debts) || b.debts.length > MAX_ROWS) return bad;
     for (const x of b.debts) { const d = validDebt(x); if (!d) return bad; debts.push(d); }
   }
+  const accounts = list(b.accounts, validAccount, 200), transfers = list(b.transfers, validTransfer), holdings = list(b.holdings, validHolding, 500);
+  const goals = list(b.goals, validGoal, 200), photos = list(b.photos, validPhoto, 20000);
+  if (!accounts || !transfers || !holdings || !goals || !photos) return bad;
   const s = (b.settings ?? {}) as Record<string, unknown>;
+  const acct = (v: unknown) => (typeof v === "string" && accounts.some(a => a.id === v) ? v : null);
   const categoryLimits: CategoryLimits = {};
   if (s.categoryLimits && typeof s.categoryLimits === "object") {
     for (const [k, v] of Object.entries(s.categoryLimits as Record<string, unknown>)) {
@@ -118,7 +178,8 @@ export function readBackup(text: string): { ok: true; value: Backup } | { ok: fa
   }
   const limit = s.monthlyLimitPaise;
   const monthlyLimitPaise = typeof limit === "number" && Number.isInteger(limit) && limit > 0 && limit <= MAX_PAISE ? limit : null;
-  return { ok: true, value: { kind: BACKUP_KIND, version: b.version, exportedAt: String(b.exportedAt ?? ""), expenses, learned, repeats, debts, settings: { monthlyLimitPaise, categoryLimits, seniorSelf: s.seniorSelf === true, seniorParents: s.seniorParents === true } } };
+  return { ok: true, value: { kind: BACKUP_KIND, version: b.version, exportedAt: String(b.exportedAt ?? ""), expenses, learned, repeats, debts, accounts, transfers, holdings, goals, photos,
+    settings: { monthlyLimitPaise, categoryLimits, seniorSelf: s.seniorSelf === true, seniorParents: s.seniorParents === true, upiAccount: acct(s.upiAccount), cashAccount: acct(s.cashAccount) } } };
 }
 
 /** What a restore would do: new rows, rows where the backup's copy is newer, and rows already the same or newer here. */

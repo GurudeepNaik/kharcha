@@ -85,6 +85,27 @@ for (const [i, r] of RECEIPTS.entries()) {
 }
 ok("address bar is clean after a share", await page.evaluate(() => location.search === ""));
 
+// Saving after a shared receipt keeps the receipt as the entry's photo.
+{
+  await page.evaluate(() => {
+    const f = document.createElement("form");
+    f.method = "post"; f.action = "/share-target"; f.enctype = "multipart/form-data"; f.id = "share-form3";
+    const inp = document.createElement("input"); inp.type = "file"; inp.name = "receipt"; f.append(inp);
+    document.body.append(f);
+  });
+  await (await page.$("#share-form3 input"))!.uploadFile(join(dir, "r0.png"));
+  await Promise.all([page.waitForNavigation({ waitUntil: "networkidle2" }), page.evaluate(() => (document.querySelector("#share-form3") as HTMLFormElement).submit())]);
+  await page.waitForFunction(() => (document.querySelector("#entry") as HTMLInputElement | null)?.value === "Ravi Kumar 500 upi", { timeout: 90000 }).catch(() => undefined);
+  await page.focus("#entry"); await page.keyboard.press("Enter");
+  await new Promise(r => setTimeout(r, 800));
+  const saved = await page.evaluate(() => new Promise<{ photo?: boolean; n: number }>(res => {
+    const r = indexedDB.open("expenses");
+    r.onsuccess = () => { const tx = r.result.transaction(["expenses", "photos"]); const q = tx.objectStore("expenses").getAll(); const ph = tx.objectStore("photos").count();
+      tx.oncomplete = () => res({ photo: (q.result as { note: string; photo?: boolean }[]).find(e => e.note === "Ravi Kumar")?.photo, n: ph.result }); };
+  }));
+  ok(`saved entry keeps the receipt photo (${saved.n} photo stored)`, saved.photo === true && saved.n === 1);
+}
+
 // 3. Offline: a second receipt read with no internet (the reader was kept after the first use).
 await page.setOfflineMode(true);
 await page.evaluate(() => {
