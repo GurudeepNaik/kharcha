@@ -27,27 +27,27 @@ export const isCategory = (k: unknown): k is Category => typeof k === "string" &
 /** Words (English and common Indian ones, as people type them in English letters). */
 const INCOME_WORDS: Record<IncomeCategory, string[]> = {
   // Only words that can't describe paying for something: "pay electricity" or "client lunch" must stay spends.
-  salary: ["salary", "payslip", "stipend", "bonus", "wages", "payday", "pension"],
+  salary: ["वेतन", "तनख्वाह", "पगार", "ಸಂಬಳ", "salary", "payslip", "stipend", "bonus", "wages", "payday", "pension"],
   business: ["freelance", "sales", "invoice paid", "shop sales"],
   refund: ["refund", "cashback", "reversal", "reimbursement"],
   income: ["income", "received", "credited", "dividend"],
 };
 
 const WORDS: Record<Exclude<SpendCategory, "other">, string[]> = {
-  food: ["chai", "tea", "coffee", "lunch", "dinner", "breakfast", "snack", "snacks", "hotel", "restaurant", "cafe", "canteen", "mess", "tiffin",
+  food: ["चाय", "खाना", "नाश्ता", "होटल", "ಚಹಾ", "ಕಾಫಿ", "ಊಟ", "ತಿಂಡಿ", "ಹೋಟೆಲ್", "chai", "tea", "coffee", "lunch", "dinner", "breakfast", "snack", "snacks", "hotel", "restaurant", "cafe", "canteen", "mess", "tiffin",
     "swiggy", "zomato", "idli", "dosa", "vada", "biryani", "meals", "meal", "thali", "pizza", "burger", "juice", "icecream", "sweets", "bakery",
     "parcel", "food", "khana", "nashta", "pani puri", "chaat", "samosa", "paratha", "dhaba"],
-  groceries: ["milk", "vegetables", "veggies", "veg", "sabzi", "sabji", "fruits", "fruit", "kirana", "grocery", "groceries", "dmart", "bigbasket",
+  groceries: ["दूध", "सब्ज़ी", "सब्जी", "राशन", "किराना", "ಹಾಲು", "ತರಕಾರಿ", "ದಿನಸಿ", "ಅಕ್ಕಿ", "milk", "vegetables", "veggies", "veg", "sabzi", "sabji", "fruits", "fruit", "kirana", "grocery", "groceries", "dmart", "bigbasket",
     "blinkit", "zepto", "instamart", "rice", "atta", "dal", "oil", "eggs", "egg", "bread", "curd", "doodh", "ration", "provisions", "chicken", "mutton", "fish", "meat"],
-  travel: ["auto", "bus", "metro", "uber", "ola", "rapido", "cab", "taxi", "petrol", "diesel", "fuel", "cng", "train", "flight", "toll", "parking",
+  travel: ["ऑटो", "बस", "पेट्रोल", "टैक्सी", "ಆಟೋ", "ಬಸ್", "ಪೆಟ್ರೋಲ್", "auto", "bus", "metro", "uber", "ola", "rapido", "cab", "taxi", "petrol", "diesel", "fuel", "cng", "train", "flight", "toll", "parking",
     "fastag", "ticket", "travel", "bike", "service", "redbus", "irctc"],
-  bills: ["electricity", "current", "bescom", "light", "recharge", "mobile", "phone", "wifi", "internet", "broadband", "gas", "cylinder", "water",
+  bills: ["बिजली", "बिल", "रिचार्ज", "ಕರೆಂಟ್", "ವಿದ್ಯುತ್", "ಬಿಲ್", "ರೀಚಾರ್ಜ್", "electricity", "current", "bescom", "light", "recharge", "mobile", "phone", "wifi", "internet", "broadband", "gas", "cylinder", "water",
     "dth", "netflix", "hotstar", "prime", "spotify", "jio", "airtel", "vi", "bsnl", "bill", "bills", "insurance", "lic", "fees", "fee", "school", "tuition"],
-  shopping: ["amazon", "flipkart", "myntra", "meesho", "ajio", "clothes", "shirt", "saree", "kurta", "dress", "shoes", "chappal", "slippers",
+  shopping: ["कपड़े", "ಬಟ್ಟೆ", "amazon", "flipkart", "myntra", "meesho", "ajio", "clothes", "shirt", "saree", "kurta", "dress", "shoes", "chappal", "slippers",
     "shopping", "gift", "watch", "bag", "cosmetics", "salon", "haircut"],
-  health: ["medicine", "medicines", "medical", "tablet", "tablets", "doctor", "hospital", "clinic", "pharmacy", "chemist", "test", "lab", "dental",
+  health: ["दवा", "दवाई", "डॉक्टर", "ಔಷಧಿ", "ಮಾತ್ರೆ", "ಡಾಕ್ಟರ್", "medicine", "medicines", "medical", "tablet", "tablets", "doctor", "hospital", "clinic", "pharmacy", "chemist", "test", "lab", "dental",
     "dentist", "gym", "yoga", "health", "dawai", "checkup"],
-  rent: ["rent", "maintenance", "emi", "loan", "pg", "hostel", "deposit"],
+  rent: ["किराया", "ಬಾಡಿಗೆ", "rent", "maintenance", "emi", "loan", "pg", "hostel", "deposit"],
 };
 
 const INCOME = new Map<string, Category>();

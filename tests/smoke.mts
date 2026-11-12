@@ -213,11 +213,11 @@ ok("phone Back returns to Home", !!(await page.$("#entry")));
 await clickText(page, "Settings", "nav button");
 await page.waitForSelector("#limit");
 await page.type("#limit", "abc");
-await clickText(page, "Save", "form button");
+await page.click("[data-testid=limit-save]");
 await wait(150);
 ok("limit rejects text", (await text(page, "#limit-error")).length > 0);
 await page.click("#limit", { count: 3 }); await page.keyboard.press("Backspace"); await page.type("#limit", "20000");
-await clickText(page, "Save", "form button");
+await page.click("[data-testid=limit-save]");
 await wait(200);
 await clickText(page, "Home", "nav button");
 await page.waitForSelector("[data-testid=limit]");
@@ -271,6 +271,118 @@ await (await fresh.$("[data-testid=restore-input]"))!.uploadFile(junk);
 await wait(300);
 ok("a damaged file is refused", (await text(fresh, "[role=alert]")).includes("damaged"));
 
+// ---------- People: lent and borrowed ----------
+{
+  await clickText(page, "Home", "nav button");
+  await page.waitForSelector("#entry");
+  const spentToday = paise(await text(page, "[data-testid=today-total]"));
+  await enter(page, "borrowed 200 from asha");
+  ok("Home box reads a loan line (preview)", (await text(page, "[data-testid=debt-preview]")).includes("Asha gave you"));
+  await page.keyboard.press("Enter");
+  await wait(400);
+  ok("a loan doesn't change spending", paise(await text(page, "[data-testid=today-total]")) === spentToday);
+  await clickText(page, "People", "nav button");
+  await page.waitForSelector("#p-name");
+  ok("People: you owe ₹200", (await text(page, "[data-testid=you-owe]")) === "₹200");
+  await page.type("#p-name", "Ravi"); await page.type("#p-amount", "500");
+  await clickText(page, "Save", "form button");
+  await wait(400);
+  ok("People: Ravi owes you ₹500", (await text(page, "[data-testid=owed-to-you]")) === "₹500" && (await text(page, "[data-testid=people]")).includes("Ravi owes you ₹500"));
+  await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("[data-testid=people] button")].find(b => b.textContent?.includes("Ravi"))!.click());
+  await page.waitForSelector("[data-testid=person-balance]");
+  await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("dialog button")].find(b => b.textContent?.startsWith("Settle up"))!.click());
+  await wait(400);
+  ok("Settle up clears Ravi", (await text(page, "[data-testid=person-balance]")) === "Settled" && (await text(page, "[data-testid=owed-to-you]")) === "₹0");
+  await page.keyboard.press("Escape");
+}
+
+// ---------- Budgets ----------
+{
+  await clickText(page, "Settings", "nav button");
+  await page.waitForSelector("#b-food");
+  await page.type("#b-food", "100");
+  await page.click("[data-testid=budgets-save]");
+  await wait(300);
+  await clickText(page, "Home", "nav button");
+  await page.waitForSelector("[data-testid=budget-warnings]");
+  ok("Home warns: Food over budget", (await text(page, "[data-testid=budget-warnings]")).includes("Food: ₹"));
+  await clickText(page, "Month", "nav button");
+  await page.waitForSelector("[data-testid=month-total]");
+  ok("Month shows Food against its budget", (await text(page, "ul[aria-label='By category']")).includes("of ₹100"));
+}
+
+// ---------- Trends ----------
+{
+  ok("Month shows the spend-per-day chart", !!(await page.$("[data-testid=daily-chart]")));
+  ok("Month shows the last 6 months chart", !!(await page.$("[data-testid=six-chart]")));
+  ok("Month compares with last month", (await text(page, "[data-testid=vs-last]")).includes("last month"));
+  await page.evaluate(() => (document.querySelector("[data-testid=daily-chart] figcaption button") as HTMLElement).click());
+  const dayRows = await page.$$eval("[data-testid=daily-chart] tbody tr", r => r.length);
+  ok(`chart has a table view (${dayRows} days, one per day so far)`, dayRows === new Date().getDate());
+  const tableSum = await page.$$eval("[data-testid=daily-chart] tbody tr td:last-child", c => c.map(x => x.textContent!));
+  ok("daily table adds up to the month total", tableSum.reduce((s, x) => s + paise(x), 0) === paise(await text(page, "[data-testid=month-total]")));
+}
+
+// ---------- Search ----------
+{
+  await clickText(page, "Home", "nav button");
+  await page.waitForSelector("#entry");
+  await page.click("button[aria-controls=search-panel]");
+  await page.type("#q", "swiggy");
+  await wait(200);
+  ok("search finds swiggy (1 entry)", (await text(page, "[data-testid=search-summary]")).startsWith("1 entry"));
+  await page.click("#q", { count: 3 }); await page.keyboard.press("Backspace");
+  await page.select("#search-panel select:nth-of-type(1)", "");
+  await page.evaluate(() => { const s = document.querySelectorAll<HTMLSelectElement>("#search-panel select")[2]!; s.value = "in"; s.dispatchEvent(new Event("change", { bubbles: true })); });
+  await wait(200);
+  const inRows = (await dbRows(page)).filter(r => INCOME.has(r.category)).length;
+  ok(`filter "Money in only" (${inRows})`, (await text(page, "[data-testid=search-summary]")).startsWith(inRows === 1 ? "1 entry" : `${inRows} entries`));
+}
+
+// ---------- Share sheet and home-screen shortcut ----------
+{
+  const p = await phone();
+  await p.goto(`${BASE}/?text=${encodeURIComponent("₹500 paid to Ravi Kumar on 12 Nov via Google Pay")}`, { waitUntil: "networkidle2" });
+  await p.waitForFunction(() => (document.querySelector("#entry") as HTMLInputElement | null)?.value !== "", { timeout: 5000 }).catch(() => undefined);
+  ok("shared payment fills the box", (await p.$eval("#entry", e => (e as HTMLInputElement).value)) === "Ravi Kumar 500 upi");
+  ok("shared text is cleared from the address bar", !(await p.evaluate(() => location.search)));
+  await p.goto(`${BASE}/?add=1`, { waitUntil: "networkidle2" });
+  await wait(400);
+  ok("shortcut opens with the box ready to type", await p.evaluate(() => document.activeElement?.id === "entry"));
+  const m = await p.evaluate(async () => (await fetch("/manifest.webmanifest")).json());
+  ok("manifest: share target and 3 shortcuts", m.share_target?.action === "/" && m.shortcuts?.length === 3);
+  await p.close();
+}
+
+// ---------- Hindi and Kannada ----------
+{
+  const p = await phone();
+  await clickText(p, "Settings", "nav button");
+  await p.waitForSelector("input[name=lang]");
+  await p.evaluate(() => (document.querySelector("input[name=lang][value=hi]") as HTMLElement).click());
+  await wait(300);
+  ok("Hindi: bottom bar reads होम", (await text(p, "[data-tab=home]")) === "होम" && (await p.evaluate(() => document.documentElement.lang)) === "hi-IN");
+  await p.reload({ waitUntil: "networkidle2" }); await wait(400);
+  ok("Hindi is remembered after reopening", (await text(p, "[data-tab=settings]")) === "सेटिंग्स");
+  await p.evaluate(() => (document.querySelector("[data-tab=home]") as HTMLElement).click());
+  await p.waitForSelector("#entry");
+  await enter(p, "चाय 20");
+  ok("typing चाय 20 reads ₹20 · खाना", (await text(p, "[data-testid=preview-amount]")) === "₹20" && (await p.$eval("#entry-help select", e => (e as HTMLSelectElement).selectedOptions[0]!.textContent)) === "खाना");
+  await p.keyboard.press("Enter"); await wait(300);
+  ok("Hindi toast", (await text(p, "[role=status]")).includes("सेव हुआ"));
+  ok("Hindi: no sideways scroll", await noOverflow(p));
+  await p.evaluate(() => (document.querySelector("[data-tab=settings]") as HTMLElement).click());
+  await p.waitForSelector("input[name=lang]");
+  await p.evaluate(() => (document.querySelector("input[name=lang][value=kn]") as HTMLElement).click());
+  await wait(300);
+  ok("Kannada: bottom bar reads ಮುಖಪುಟ", (await text(p, "[data-tab=home]")) === "ಮುಖಪುಟ");
+  for (const tab of ["home", "month", "people", "settings"]) {
+    await p.evaluate((k: string) => (document.querySelector(`[data-tab=${k}]`) as HTMLElement).click(), tab); await wait(250);
+  }
+  ok("Kannada: no sideways scroll on any screen", await noOverflow(p));
+  await p.close();
+}
+
 // ---------- Phone widths, keyboard ----------
 for (const w of [320, 390]) {
   const p = await phone(w);
@@ -278,6 +390,8 @@ for (const w of [320, 390]) {
   ok(`${w}px: no sideways scroll on Home`, await noOverflow(p));
   await clickText(p, "Month", "nav button"); await wait(200);
   ok(`${w}px: no sideways scroll on Month`, await noOverflow(p));
+  await clickText(p, "People", "nav button"); await wait(200);
+  ok(`${w}px: no sideways scroll on People`, await noOverflow(p));
   await clickText(p, "Settings", "nav button"); await wait(200);
   ok(`${w}px: no sideways scroll on Settings`, await noOverflow(p));
   await clickText(p, "Home", "nav button"); await wait(200);

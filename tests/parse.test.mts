@@ -30,6 +30,12 @@ const OK: Row[] = [
   ["something new 75", 7500, "something new", "other"],
   ["recharge 299 - jio", 29900, "recharge - jio", "bills"],
   ["inr 10 tea", 1000, "tea", "food"],
+  // Typed in Hindi or Kannada
+  ["चाय 20", 2000, "चाय", "food"],
+  ["दूध 30 कल", 3000, "दूध", "groceries", "2026-11-11"],
+  ["ಬಾಡಿಗೆ 8000", 800000, "ಬಾಡಿಗೆ", "rent"],
+  ["ಆಟೋ 60 ನಿನ್ನೆ", 6000, "ಆಟೋ", "travel", "2026-11-11"],
+  ["ಸಂಬಳ 40000", 4000000, "ಸಂಬಳ", "salary"],
   // Money in
   ["salary 50,000", 5000000, "salary", "salary"],
   ["+2000 from ravi", 200000, "from ravi", "income"],

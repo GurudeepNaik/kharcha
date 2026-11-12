@@ -2,10 +2,11 @@
 import { isCategory, isIncomeCategory, categoryLabel, type Category } from "./categories";
 import { validDate } from "./dates";
 import { MAX_PAISE, plainAmount } from "./money";
-import type { Expense, Repeat, Settings } from "./types";
+import type { Debt } from "./debts";
+import type { CategoryLimits, Expense, Repeat, Settings } from "./types";
 
 export const BACKUP_KIND = "expense-tracker-backup";
-export const BACKUP_VERSION = 2; // 2 added money in and monthly repeats; version 1 files still restore
+export const BACKUP_VERSION = 3; // 2: money in, monthly repeats. 3: lent/borrowed, category budgets. Older files still restore.
 export const MAX_BACKUP_BYTES = 20 * 1024 * 1024;
 const MAX_ROWS = 200_000;
 
@@ -16,14 +17,15 @@ export interface Backup {
   expenses: Expense[];
   learned: { word: string; category: Category }[];
   repeats: Repeat[];
-  settings: Pick<Settings, "monthlyLimitPaise">;
+  debts: Debt[];
+  settings: Pick<Settings, "monthlyLimitPaise" | "categoryLimits">;
 }
 
-export function makeBackup(expenses: Expense[], learned: Map<string, Category>, settings: Settings, repeats: Repeat[] = [], now = new Date()): Backup {
+export function makeBackup(expenses: Expense[], learned: Map<string, Category>, settings: Settings, repeats: Repeat[] = [], debts: Debt[] = [], now = new Date()): Backup {
   return {
-    kind: BACKUP_KIND, version: BACKUP_VERSION, exportedAt: now.toISOString(), expenses, repeats,
+    kind: BACKUP_KIND, version: BACKUP_VERSION, exportedAt: now.toISOString(), expenses, repeats, debts,
     learned: [...learned].map(([word, category]) => ({ word, category })),
-    settings: { monthlyLimitPaise: settings.monthlyLimitPaise },
+    settings: { monthlyLimitPaise: settings.monthlyLimitPaise, categoryLimits: settings.categoryLimits },
   };
 }
 
@@ -61,6 +63,21 @@ function validRepeat(x: unknown): Repeat | null {
   return { id: r.id, amountPaise: r.amountPaise, note: r.note, category: r.category, method: r.method, day: r.day, lastMonth: r.lastMonth, createdAt: r.createdAt };
 }
 
+function validDebt(x: unknown): Debt | null {
+  if (!x || typeof x !== "object") return null;
+  const d = x as Record<string, unknown>;
+  if (typeof d.id !== "string" || !ID.test(d.id)) return null;
+  if (typeof d.person !== "string" || !d.person.trim() || d.person.length > 60) return null;
+  if (d.dir !== "gave" && d.dir !== "got") return null;
+  if (typeof d.amountPaise !== "number" || !Number.isInteger(d.amountPaise) || d.amountPaise <= 0 || d.amountPaise > MAX_PAISE) return null;
+  if (typeof d.note !== "string" || d.note.length > 60) return null;
+  if (typeof d.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d.date)) return null;
+  const [y, m, dd] = d.date.split("-").map(Number) as [number, number, number];
+  if (validDate(y, m, dd) !== d.date) return null;
+  if (typeof d.createdAt !== "string" || !ISO.test(d.createdAt) || typeof d.updatedAt !== "string" || !ISO.test(d.updatedAt)) return null;
+  return { id: d.id, person: d.person, dir: d.dir, amountPaise: d.amountPaise, note: d.note, date: d.date, createdAt: d.createdAt, updatedAt: d.updatedAt };
+}
+
 /** Reads a backup file's text. Every row is checked; one bad row rejects the whole file, so nothing half-loads. */
 export function readBackup(text: string): { ok: true; value: Backup } | { ok: false; error: string } {
   const bad = { ok: false as const, error: "This file isn't a backup from this app, or it is damaged." };
@@ -85,10 +102,21 @@ export function readBackup(text: string): { ok: true; value: Backup } | { ok: fa
     if (!Array.isArray(b.repeats) || b.repeats.length > 1000) return bad;
     for (const x of b.repeats) { const r = validRepeat(x); if (!r) return bad; repeats.push(r); }
   }
+  const debts: Debt[] = [];
+  if (b.debts !== undefined) {
+    if (!Array.isArray(b.debts) || b.debts.length > MAX_ROWS) return bad;
+    for (const x of b.debts) { const d = validDebt(x); if (!d) return bad; debts.push(d); }
+  }
   const s = (b.settings ?? {}) as Record<string, unknown>;
+  const categoryLimits: CategoryLimits = {};
+  if (s.categoryLimits && typeof s.categoryLimits === "object") {
+    for (const [k, v] of Object.entries(s.categoryLimits as Record<string, unknown>)) {
+      if (isCategory(k) && !isIncomeCategory(k) && typeof v === "number" && Number.isInteger(v) && v > 0 && v <= MAX_PAISE) categoryLimits[k as keyof CategoryLimits] = v;
+    }
+  }
   const limit = s.monthlyLimitPaise;
   const monthlyLimitPaise = typeof limit === "number" && Number.isInteger(limit) && limit > 0 && limit <= MAX_PAISE ? limit : null;
-  return { ok: true, value: { kind: BACKUP_KIND, version: b.version, exportedAt: String(b.exportedAt ?? ""), expenses, learned, repeats, settings: { monthlyLimitPaise } } };
+  return { ok: true, value: { kind: BACKUP_KIND, version: b.version, exportedAt: String(b.exportedAt ?? ""), expenses, learned, repeats, debts, settings: { monthlyLimitPaise, categoryLimits } } };
 }
 
 /** What a restore would do: new rows, rows where the backup's copy is newer, and rows already the same or newer here. */
@@ -112,10 +140,17 @@ const cell = (s: string) => {
 };
 
 /** CSV for Excel / Google Sheets. The BOM makes Excel read ₹ and Indian scripts correctly. */
-export function toCsv(rows: Expense[]): string {
+export function toCsv(rows: Expense[], debts: Debt[] = []): string {
   const lines = ["Date,Type,Amount (₹),Category,Note,Paid by"];
-  for (const e of [...rows].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt))) {
-    lines.push([e.date, isIncomeCategory(e.category) ? "Money in" : "Spent", plainAmount(e.amountPaise), categoryLabel(e.category), cell(e.note), e.method === "upi" ? "UPI" : e.method === "cash" ? "Cash" : ""].join(","));
+  const out: [string, string, string][] = [];
+  for (const e of rows) {
+    out.push([e.date, e.createdAt, [e.date, isIncomeCategory(e.category) ? "Money in" : "Spent", plainAmount(e.amountPaise), categoryLabel(e.category), cell(e.note), e.method === "upi" ? "UPI" : e.method === "cash" ? "Cash" : ""].join(",")]);
   }
+  for (const d of debts) {
+    const note = d.note ? `${d.person}: ${d.note}` : d.person;
+    out.push([d.date, d.createdAt, [d.date, d.dir === "gave" ? "Gave (lent or repaid)" : "Got (borrowed or paid back)", plainAmount(d.amountPaise), "People", cell(note), ""].join(",")]);
+  }
+  out.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+  for (const [, , line] of out) lines.push(line);
   return "﻿" + lines.join("\r\n") + "\r\n";
 }

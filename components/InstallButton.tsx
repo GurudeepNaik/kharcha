@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { APP_NAME } from "@/lib/brand";
+import { useI18n } from "@/lib/i18n";
 import { installWay, onInstallChange, promptInstall, startInstallWatch, type InstallWay } from "@/lib/install";
 
 /** Header button: "Install" where the browser offers it, Add to Home Screen steps on iPhone, nothing once installed. */
 export function InstallButton() {
+  const { t } = useI18n();
   const [way, setWay] = useState<InstallWay>("none");
   const [steps, setSteps] = useState(false);
 
@@ -22,17 +24,17 @@ export function InstallButton() {
         onClick={() => (way === "ios" ? setSteps(s => !s) : void promptInstall())}
         className="press flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-card px-4 text-sm font-semibold">
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>
-        Install
+        {t.install.button}
       </button>
       {way === "ios" && steps && (
-        <div id="ios-steps" role="dialog" aria-label={`Add ${APP_NAME} to your Home Screen`}
+        <div id="ios-steps" role="dialog" aria-label={t.install.title(APP_NAME)}
           className="fixed inset-x-3 top-[calc(4.25rem+env(safe-area-inset-top))] z-50 mx-auto max-w-sm rounded-2xl border border-line bg-card p-4 shadow-xl">
           <ol className="list-decimal space-y-1.5 ps-5 text-[15px]">
-            <li>Tap the Share button <ShareGlyph /> at the bottom of Safari.</li>
-            <li>Choose <strong>Add to Home Screen</strong>.</li>
-            <li>Tap <strong>Add</strong>. {APP_NAME} opens like an app, even offline.</li>
+            <li>{t.install.s1} <ShareGlyph /></li>
+            <li>{t.install.s2}</li>
+            <li>{t.install.s3(APP_NAME)}</li>
           </ol>
-          <button type="button" onClick={() => setSteps(false)} className="press mt-3 min-h-11 w-full rounded-xl bg-soft text-sm font-semibold">Got it</button>
+          <button type="button" onClick={() => setSteps(false)} className="press mt-3 min-h-11 w-full rounded-xl bg-soft text-sm font-semibold">{t.install.ok}</button>
         </div>
       )}
     </>

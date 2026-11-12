@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useI18n } from "@/lib/i18n";
 
 export function ThemeToggle() {
+  const { t } = useI18n();
   const [theme, setTheme] = useState<string | null>(null);
   useEffect(() => setTheme(document.documentElement.dataset.theme ?? "light"), []);
   const next = theme === "dark" ? "light" : "dark";
   return (
     <button
-      aria-label={`Switch to ${next} mode`}
+      aria-label={t.theme(next)}
       onClick={() => {
         document.documentElement.dataset.theme = next;
         try { localStorage.setItem("theme", next); } catch { /* fine */ }

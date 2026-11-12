@@ -10,6 +10,14 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     scope: "/",
     display: "standalone",
+    // Once installed on Android, the app appears in the share sheet: share a payment from a UPI app to note it.
+    share_target: { action: "/", method: "GET", params: { title: "title", text: "text", url: "url" } },
+    // Long-press the app icon for these.
+    shortcuts: [
+      { name: "Add a spend", short_name: "Add", url: "/?add=1", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }] },
+      { name: "This month", short_name: "Month", url: "/#month", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }] },
+      { name: "People", short_name: "People", url: "/#people", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }] },
+    ],
     background_color: "#f6f7f5",
     theme_color: "#0b7a4b",
     icons: [

@@ -1,8 +1,11 @@
-import { daysLeft } from "@/lib/dates";
-import { rupees } from "@/lib/money";
+"use client";
 
-/** "₹4,200 left · 19 days to go" with a bar, or how far over the limit the month is. */
+import { daysLeft } from "@/lib/dates";
+import { useI18n } from "@/lib/i18n";
+
+/** "₹4,200 left of ₹20,000 · 19 days to go" with a bar, or how far over the limit the month is. */
 export function LimitLine({ spent, limit, month, now }: { spent: number; limit: number; month: string; now: string }) {
+  const { t } = useI18n();
   const left = limit - spent;
   const days = daysLeft(month, now);
   const used = Math.min(spent / limit, 1);
@@ -13,10 +16,8 @@ export function LimitLine({ spent, limit, month, now }: { spent: number; limit: 
       <div className="h-2 overflow-hidden rounded-full bg-soft" aria-hidden>
         <div className={`bar h-full rounded-full ${over ? "bg-bad" : near ? "bg-warn" : "bg-accent"}`} style={{ width: `${Math.max(used * 100, 1.5)}%` }} />
       </div>
-      <p className={`mt-1.5 text-sm ${over ? "font-semibold text-bad" : "text-muted"}`}>
-        {over
-          ? <>{rupees(-left)} over your {rupees(limit)} limit</>
-          : <><span className="num font-semibold text-fg">{rupees(left)}</span> left of {rupees(limit)}{days ? ` · ${days === 1 ? "last day" : `${days} days to go`}` : ""}</>}
+      <p className={`num mt-1.5 text-sm ${over ? "font-semibold text-bad" : "text-muted"}`}>
+        {over ? t.limit.over(-left, limit) : <>{t.limit.left(left, limit)}{days ? ` · ${days === 1 ? t.limit.lastDay : t.limit.days(days)}` : ""}</>}
       </p>
     </div>
   );

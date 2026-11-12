@@ -2,19 +2,21 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { Category } from "./categories";
 import { sortRows } from "./totals";
-import { DEFAULT_SETTINGS, type Expense, type Repeat, type Settings } from "./types";
+import type { Debt } from "./debts";
+import { DEFAULT_SETTINGS, type CategoryLimits, type Expense, type Repeat, type Settings } from "./types";
 
 interface Schema extends DBSchema {
   expenses: { key: string; value: Expense; indexes: { date: string } };
   learned: { key: string; value: { word: string; category: Category } };
   settings: { key: string; value: unknown };
   repeats: { key: string; value: Repeat };
+  debts: { key: string; value: Debt };
 }
 
 let dbp: Promise<IDBPDatabase<Schema>> | null = null;
 function db() {
   // The database name stays neutral so the app can be renamed without losing anyone's data.
-  dbp ??= openDB<Schema>("expenses", 2, {
+  dbp ??= openDB<Schema>("expenses", 3, {
     upgrade(d, old) {
       if (old < 1) {
         d.createObjectStore("expenses", { keyPath: "id" }).createIndex("date", "date");
@@ -22,6 +24,7 @@ function db() {
         d.createObjectStore("settings");
       }
       if (old < 2) d.createObjectStore("repeats", { keyPath: "id" }); // monthly repeats (v2)
+      if (old < 3) d.createObjectStore("debts", { keyPath: "id" }); // lent and borrowed (v3)
     },
     // Another tab opened a newer version: step aside so it can upgrade; the next call here reopens.
     blocking() { void dbp?.then(x => x.close()); dbp = null; },
@@ -53,10 +56,11 @@ export async function learn(word: string, category: Category) { await (await db(
 
 export async function getSettings(): Promise<Settings> {
   const d = await db();
-  const [limit, last] = await Promise.all([d.get("settings", "monthlyLimitPaise"), d.get("settings", "lastBackupAt")]);
+  const [limit, last, cats] = await Promise.all([d.get("settings", "monthlyLimitPaise"), d.get("settings", "lastBackupAt"), d.get("settings", "categoryLimits")]);
   return {
     monthlyLimitPaise: typeof limit === "number" ? limit : DEFAULT_SETTINGS.monthlyLimitPaise,
     lastBackupAt: typeof last === "string" ? last : DEFAULT_SETTINGS.lastBackupAt,
+    categoryLimits: cats && typeof cats === "object" ? (cats as CategoryLimits) : {},
   };
 }
 export async function saveSettings(s: Partial<Settings>) {
@@ -90,9 +94,17 @@ export async function applyDue(entries: Expense[], rules: Repeat[]): Promise<Exp
   return added;
 }
 
+export async function allDebts(): Promise<Debt[]> { return (await db()).getAll("debts"); }
+export async function putDebt(x: Debt) { await (await db()).put("debts", x); }
+export async function deleteDebt(id: string) { await (await db()).delete("debts", id); }
+
 /** Writes a restore in one transaction: either every row lands or none do. */
-export async function applyRestore(rows: Expense[], learned: { word: string; category: Category }[], repeats: Repeat[] = []) {
-  const tx = (await db()).transaction(["expenses", "learned", "repeats"], "readwrite");
+export async function applyRestore(rows: Expense[], learned: { word: string; category: Category }[], repeats: Repeat[] = [], debts: Debt[] = []) {
+  const tx = (await db()).transaction(["expenses", "learned", "repeats", "debts"], "readwrite");
+  for (const x of debts) {
+    const cur = await tx.objectStore("debts").get(x.id);
+    if (!cur || cur.updatedAt < x.updatedAt) await tx.objectStore("debts").put(x);
+  }
   for (const r of rows) await tx.objectStore("expenses").put(r);
   for (const l of learned) await tx.objectStore("learned").put(l);
   for (const r of repeats) {
@@ -105,5 +117,5 @@ export async function applyRestore(rows: Expense[], learned: { word: string; cat
 /** For tests only. */
 export async function _wipe() {
   const d = await db();
-  await Promise.all([d.clear("expenses"), d.clear("learned"), d.clear("settings"), d.clear("repeats")]);
+  await Promise.all([d.clear("expenses"), d.clear("learned"), d.clear("settings"), d.clear("repeats"), d.clear("debts")]);
 }

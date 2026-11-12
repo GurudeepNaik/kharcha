@@ -124,3 +124,8 @@ select.chip-select { padding-inline-end: 1.6rem; background-image: linear-gradie
 .dock[data-typing="true"] { bottom: var(--kb, 0px); }
 /* Anything scrolled into view (keyboard Tab, focus) stops above the add box and bottom bar, never under them. */
 html { scroll-padding-bottom: calc(14rem + env(safe-area-inset-bottom)); scroll-padding-top: 1rem; }
+
+/* Chart marks: their own green, validated for each surface (the accent is too light for dark-mode bars). */
+:root { --chart: #0b7a4b; }
+[data-theme="dark"] { --chart: #3aa877; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --chart: #3aa877; } }
