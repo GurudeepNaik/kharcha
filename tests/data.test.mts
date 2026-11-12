@@ -102,6 +102,14 @@ assert.deepEqual(R.dueRepeats([{ ...sal, lastMonth: "2027-01" }], "2027-02-28", 
 assert.equal(R.dueRepeats([{ ...rule, lastMonth: "2020-01" }], "2026-11-12", at).entries.length, 24, "catch-up capped at 24 months");
 assert.equal(R.nextDate({ ...rule, lastMonth: "2026-11" }), "2026-12-01");
 assert.equal(R.repeatEntryId(rule.id, "2026-09"), due.entries[0]!.id);
+// Skip next: that month is never added, the one after is.
+const sk = R.skipNext({ ...rule, lastMonth: "2026-11" });
+assert.equal(sk.lastMonth, "2026-12");
+assert.equal(R.dueRepeats([sk], "2026-12-31", at).entries.length, 0, "December skipped");
+assert.deepEqual(R.dueRepeats([sk], "2027-01-02", at).entries.map(e => e.date), ["2027-01-01"], "January added");
+// Coming up: within 7 days, after today, soonest first.
+const u = R.upcoming([{ ...rule, id: "a", day: 15, lastMonth: "2026-10" }, { ...rule, id: "b", day: 13, lastMonth: "2026-10" }, { ...rule, id: "c", day: 25, lastMonth: "2026-10" }, { ...rule, id: "d", day: 12, lastMonth: "2026-10" }], "2026-11-12");
+assert.deepEqual(u.map(x => [x.rule.id, x.date]), [["b", "2026-11-13"], ["a", "2026-11-15"]], "not today, not after 7 days");
 
 // Stored: due entries are added once, even if the same batch runs twice (two tabs).
 await S._wipe();

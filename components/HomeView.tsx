@@ -5,19 +5,20 @@ import { useState } from "react";
 import { APP_NAME } from "@/lib/brand";
 import { CATEGORIES, type SpendCategory } from "@/lib/categories";
 import { monthOf } from "@/lib/dates";
-import { dayText, monthText, useI18n } from "@/lib/i18n";
+import { dateText, dayText, monthText, useI18n } from "@/lib/i18n";
+import { upcoming } from "@/lib/repeat";
 import { rupees } from "@/lib/money";
 import { EMPTY_FILTER, filterRows, isFiltering, type Filter } from "@/lib/search";
 import { byCategory, byDay, incomes, inMonth, invests, onDay, spends, sum } from "@/lib/totals";
-import type { Expense, Settings } from "@/lib/types";
+import type { Expense, Repeat, Settings } from "@/lib/types";
 import { LimitLine } from "./LimitLine";
 import { Icon, SpendRow, Svg, card } from "./ui";
 
 const PAGE = 60;
 const DAY_MS = 86_400_000;
 
-export function HomeView({ rows, now, settings, onOpen, onMonth, onBackup, isRepeating }: {
-  rows: Expense[]; now: string; settings: Settings;
+export function HomeView({ rows, now, settings, repeats, onSkip, onOpen, onMonth, onBackup, isRepeating }: {
+  rows: Expense[]; now: string; settings: Settings; repeats: Repeat[]; onSkip: (r: Repeat) => Promise<void>;
   onOpen: (e: Expense) => void; onMonth: () => void; onBackup: () => void; isRepeating: (e: Expense) => boolean;
 }) {
   const i = useI18n();
@@ -42,6 +43,7 @@ export function HomeView({ rows, now, settings, onOpen, onMonth, onBackup, isRep
     .map(c => ({ ...c, budget: settings.categoryLimits[c.category as SpendCategory] ?? 0 }))
     .filter(c => c.budget > 0 && c.paise >= c.budget * 0.85);
 
+  const soon = upcoming(repeats, now, 7);
   const filtering = searching && isFiltering(f);
   const list = filtering ? filterRows(rows, f) : rows;
   const days = byDay(list.slice(0, shown));
@@ -88,6 +90,24 @@ export function HomeView({ rows, now, settings, onOpen, onMonth, onBackup, isRep
             </li>
           ))}
         </ul>
+      )}
+
+      {soon.length > 0 && (
+        <section aria-labelledby="soon-title" className={`mt-3 ${card} p-4`} data-testid="upcoming">
+          <h2 id="soon-title" className="font-semibold">{t.home.upcoming}</h2>
+          <p className="text-[13px] text-muted">{t.home.upcomingHelp}</p>
+          <ul className="mt-1 divide-y divide-line">
+            {soon.map(({ rule, date }) => (
+              <li key={rule.id} className="flex items-center gap-3 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{rule.note || t.cat[rule.category]} <span className="num">{rupees(rule.amountPaise)}</span></span>
+                  <span className="block text-[13px] text-muted">{dateText(date, i)}</span>
+                </span>
+                <button type="button" onClick={() => void onSkip(rule)} className="press min-h-11 shrink-0 rounded-xl border border-line px-4 text-[14px] font-semibold">{t.home.skip}</button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {needBackup && (

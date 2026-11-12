@@ -206,6 +206,46 @@ await page.keyboard.press("Escape");
   await wait(500);
   ok("edit sheet can turn on Every month", !!(await dbRows(page)).find(r => r.id === chai.id)?.repeatId);
   ok("row says Every month", (await text(page, `button[data-id="${chai.id}"]`)).includes("Every month"));
+
+  // Skip this month (on an entry a repeat added): the entry goes, the repeat stays.
+  await openRow(page, chai.id);
+  await page.click("[data-testid=skip-this]");
+  await wait(400);
+  const ruleId = chai.repeatId ?? (await page.evaluate(() => new Promise<string>(res => { const r = indexedDB.open("expenses"); r.onsuccess = () => { const q = r.result.transaction("repeats").objectStore("repeats").getAll(); q.onsuccess = () => res(q.result.find((x: { note: string }) => x.note === "chai")?.id); }; })));
+  const reps = () => page.evaluate(() => new Promise<{ id: string; note: string; lastMonth: string }[]>(res => { const r = indexedDB.open("expenses"); r.onsuccess = () => { const q = r.result.transaction("repeats").objectStore("repeats").getAll(); q.onsuccess = () => { res(q.result); r.result.close(); }; }; }));
+  ok("Skip this month removes the entry", !(await dbRows(page)).some(r => r.id === chai.id));
+  ok("...and keeps the repeat", (await reps()).some(r => r.id === ruleId));
+  await clickText(page, "Undo");
+  await wait(300);
+  ok("Undo brings the skipped entry back", (await dbRows(page)).some(r => r.id === chai.id));
+
+  // Skip next (Settings): the rule moves on one month without adding anything.
+  const before = (await reps()).find(r => r.note === "chai")!;
+  await clickText(page, "Settings", "nav button");
+  await page.waitForSelector("[data-testid=skip-repeat]");
+  await page.click("[data-testid=skip-repeat]");
+  await wait(300);
+  const after = (await reps()).find(r => r.note === "chai")!;
+  const nm = (m: string) => { const [y, mo] = m.split("-").map(Number) as [number, number]; const d = new Date(y, mo, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
+  ok(`Skip next moves the repeat on a month (${before.lastMonth} → ${after.lastMonth})`, after.lastMonth === nm(before.lastMonth));
+  await clickText(page, "Home", "nav button");
+  await page.waitForSelector("#entry");
+
+  // Coming up (Home): a repeat due in 3 days shows with Skip.
+  const soon = new Date(); soon.setDate(soon.getDate() + 3);
+  const lastMonth = new Date(soon.getFullYear(), soon.getMonth() - 1, Math.min(soon.getDate(), 28));
+  await enter(page, `broadband 799 ${lastMonth.getDate()}/${lastMonth.getMonth() + 1}/${lastMonth.getFullYear()}`);
+  await clickText(page, "Every month");
+  await page.focus("#entry"); await page.keyboard.press("Enter");
+  await wait(800);
+  const dueSoon = soon.getDate() === lastMonth.getDate();
+  if (dueSoon) {
+    await page.waitForSelector("[data-testid=upcoming]", { timeout: 3000 }).catch(() => undefined);
+    ok("Coming up lists broadband (due in 3 days)", (await text(page, "[data-testid=upcoming]")).includes("broadband"));
+    await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("[data-testid=upcoming] button")].find(b => b.textContent === "Skip")!.click());
+    await wait(400);
+    ok("Skip there removes it from Coming up", !(await text(page, "[data-testid=upcoming]")).includes("broadband"));
+  }
 }
 
 // ---------- Month ----------

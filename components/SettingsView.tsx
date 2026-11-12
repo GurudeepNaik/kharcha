@@ -25,7 +25,7 @@ function download(name: string, blob: Blob) {
 
 const SPEND_CATS = CATEGORIES.filter(c => c.kind === "spend").map(c => c.key as SpendCategory);
 
-export function SettingsView({ rows, learned, repeats, debts, settings, persisted, now, onSettings, onStopRepeat, onRestore, say }: {
+export function SettingsView({ rows, learned, repeats, debts, settings, persisted, now, onSettings, onStopRepeat, onSkipRepeat, onRestore, say }: {
   rows: Expense[];
   learned: Map<string, Category>;
   repeats: Repeat[];
@@ -35,6 +35,7 @@ export function SettingsView({ rows, learned, repeats, debts, settings, persiste
   now: string;
   onSettings: (s: Partial<Settings>) => Promise<void>;
   onStopRepeat: (r: Repeat) => Promise<void>;
+  onSkipRepeat: (r: Repeat) => Promise<void>;
   onRestore: (plan: Plan) => Promise<void>;
   say: (text: string) => void;
 }) {
@@ -176,7 +177,10 @@ export function SettingsView({ rows, learned, repeats, debts, settings, persiste
                     <span className="block truncate font-medium">{r.note || t.cat[r.category]} <span className={`num ${inc ? "text-accent" : ""}`}>{inc ? "+" : ""}{rupees(r.amountPaise)}</span></span>
                     <span className="block text-[13px] text-muted">{t.settings.next(next <= now ? t.today : dateText(next, i))}</span>
                   </span>
-                  <button type="button" onClick={() => void onStopRepeat(r)} className="press min-h-11 shrink-0 rounded-xl border border-line px-3 text-[14px] font-semibold" data-testid="stop-repeat">{t.settings.stop}</button>
+                  <span className="flex shrink-0 flex-col gap-1.5 min-[400px]:flex-row">
+                    <button type="button" onClick={() => void onSkipRepeat(r)} className="press min-h-11 rounded-xl border border-line px-3 text-[14px] font-semibold" data-testid="skip-repeat">{t.settings.skip}</button>
+                    <button type="button" onClick={() => void onStopRepeat(r)} className="press min-h-11 rounded-xl border border-line px-3 text-[14px] font-semibold" data-testid="stop-repeat">{t.settings.stop}</button>
+                  </span>
                 </li>
               );
             })}

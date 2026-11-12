@@ -1,5 +1,5 @@
 // Monthly repeats: which entries are due, given the rules and today's date. Pure, so it's easy to test.
-import { addMonths, monthOf, validDate } from "./dates";
+import { addDays, addMonths, monthOf, validDate } from "./dates";
 import type { Expense, Repeat } from "./types";
 
 const MAX_CATCH_UP = 24; // months; an app left unopened for years shouldn't flood the list
@@ -46,3 +46,12 @@ export function repeatFrom(e: Expense, id: string, at: string): Repeat {
 
 /** When the next one will be added. */
 export const nextDate = (r: Repeat) => dayIn(addMonths(r.lastMonth, 1), r.day);
+
+/** Skip the next one: the rule moves on a month without adding an entry. */
+export const skipNext = (r: Repeat): Repeat => ({ ...r, lastMonth: addMonths(r.lastMonth, 1) });
+
+/** Rules whose next date falls after today and within `days` days, soonest first. */
+export function upcoming(rules: Repeat[], now: string, days = 7): { rule: Repeat; date: string }[] {
+  const until = addDays(now, days);
+  return rules.map(rule => ({ rule, date: nextDate(rule) })).filter(x => x.date > now && x.date <= until).sort((a, b) => a.date.localeCompare(b.date));
+}

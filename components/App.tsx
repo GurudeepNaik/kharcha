@@ -5,10 +5,10 @@ import { APP_NAME } from "@/lib/brand";
 import { isIncomeCategory, isSpendCategory, keyWord, type Category } from "@/lib/categories";
 import { monthOf, today } from "@/lib/dates";
 import type { Debt, Direction } from "@/lib/debts";
-import { I18nContext, MESSAGES, dayText, initialLang, localeOf, storeLang, type I18n, type Lang } from "@/lib/i18n";
+import { I18nContext, MESSAGES, dateText, dayText, initialLang, localeOf, storeLang, type I18n, type Lang } from "@/lib/i18n";
 import { rupees } from "@/lib/money";
 import type { Parsed } from "@/lib/parse";
-import { dueRepeats, repeatFrom } from "@/lib/repeat";
+import { dueRepeats, nextDate, repeatFrom, skipNext } from "@/lib/repeat";
 import { readImageText, takeInbox } from "@/lib/ocr";
 import { receiptToLine } from "@/lib/receipt";
 import { sharedToLine } from "@/lib/share";
@@ -223,6 +223,28 @@ export function App() {
     });
   }
 
+  /** Skip the next one only: nothing is added that month, and it carries on after. */
+  async function skipRepeat(r: Repeat) {
+    const next = skipNext(r);
+    await putRepeat(next);
+    setRepeats(rp => rp.map(x => (x.id === r.id ? next : x)));
+    say(t.toast.skipped(r.note || t.cat[r.category], dateText(nextDate(r), i18n)), async () => {
+      await putRepeat(r);
+      setRepeats(rp => rp.map(x => (x.id === r.id ? r : x)));
+    });
+  }
+
+  /** An entry a repeat already added: remove it for this month; the repeat stays on. */
+  async function skipThisMonth(e: Expense) {
+    await deleteExpense(e.id);
+    setRows(r => (r ?? []).filter(x => x.id !== e.id));
+    setEditing(null);
+    say(t.toast.skippedThis(e.note || t.cat[e.category]), async () => {
+      await putExpense(e);
+      setRows(r => sortRows([e, ...(r ?? []).filter(x => x.id !== e.id)]));
+    });
+  }
+
   async function stopRepeat(r: Repeat) {
     await deleteRepeat(r.id);
     setRepeats(rp => rp.filter(x => x.id !== r.id));
@@ -278,7 +300,7 @@ export function App() {
                 </button>
               </div>
             )}
-            <HomeView rows={rows} now={now} settings={settings} onOpen={setEditing} onMonth={() => go("month")} onBackup={() => go("settings")} isRepeating={isRepeating} />
+            <HomeView rows={rows} now={now} settings={settings} repeats={repeats} onSkip={skipRepeat} onOpen={setEditing} onMonth={() => go("month")} onBackup={() => go("settings")} isRepeating={isRepeating} />
             <AddBox ref={addBox} now={now} learned={learned} typing={typing} onAdd={add} onDebt={addDebt} />
           </>
         )}
@@ -286,7 +308,7 @@ export function App() {
         {tab === "people" && <PeopleView debts={debts} now={now} onAdd={addDebt} onDelete={removeDebt} />}
         {tab === "settings" && (
           <SettingsView rows={rows} learned={learned} repeats={repeats} debts={debts} settings={settings} persisted={persisted} now={now}
-            onSettings={updateSettings} onStopRepeat={stopRepeat} say={x => say(x)}
+            onSettings={updateSettings} onStopRepeat={stopRepeat} onSkipRepeat={skipRepeat} say={x => say(x)}
             onRestore={async p => {
               await applyRestore([...p.add, ...p.update], p.backup.learned, p.backup.repeats, p.backup.debts);
               const patch: Partial<Settings> = {};
@@ -298,7 +320,7 @@ export function App() {
               say(t.toast.restored(p.add.length, p.update.length));
             }} />
         )}
-        <EditSheet expense={editing} repeating={!!editing && isRepeating(editing)} now={now} onClose={() => setEditing(null)} onSave={save} onDelete={e => remove(e)} />
+        <EditSheet expense={editing} repeating={!!editing && isRepeating(editing)} now={now} onClose={() => setEditing(null)} onSave={save} onDelete={e => remove(e)} onSkip={skipThisMonth} />
       </>
     );
   }

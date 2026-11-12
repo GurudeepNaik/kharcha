@@ -10,8 +10,9 @@ import type { Expense } from "@/lib/types";
 import { Sheet, SheetHead } from "./ui";
 
 type SaveFn = (e: Expense, categoryChanged: boolean, everyMonth: boolean) => Promise<void>;
+type SkipFn = (e: Expense) => Promise<void>;
 
-export function EditSheet({ expense, repeating, now, onClose, onSave, onDelete }: {
+export function EditSheet({ expense, repeating, now, onClose, onSave, onDelete, onSkip }: {
   expense: Expense | null;
   /** This entry's monthly repeat is still on. */
   repeating: boolean;
@@ -19,19 +20,21 @@ export function EditSheet({ expense, repeating, now, onClose, onSave, onDelete }
   onClose: () => void;
   onSave: SaveFn;
   onDelete: (e: Expense) => Promise<void>;
+  onSkip: SkipFn;
 }) {
   const { t } = useI18n();
   return (
     <Sheet open={!!expense} onClose={onClose} label={t.edit.title}>
-      {expense && <Form key={expense.id} e={expense} repeating={repeating} now={now} onClose={onClose} onSave={onSave} onDelete={onDelete} />}
+      {expense && <Form key={expense.id} e={expense} repeating={repeating} now={now} onClose={onClose} onSave={onSave} onDelete={onDelete} onSkip={onSkip} />}
     </Sheet>
   );
 }
 
-function Form({ e, repeating, now, onClose, onSave, onDelete }: {
+function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip }: {
   e: Expense; repeating: boolean; now: string; onClose: () => void;
   onSave: SaveFn;
   onDelete: (e: Expense) => Promise<void>;
+  onSkip: SkipFn;
 }) {
   const { t } = useI18n();
   const [amount, setAmount] = useState(plainAmount(e.amountPaise));
@@ -107,6 +110,11 @@ function Form({ e, repeating, now, onClose, onSave, onDelete }: {
           <span className="block text-[13px] text-muted">{t.edit.everyHint(Number(date.slice(8)) || "–")}</span>
         </span>
       </label>
+
+      {repeating && (
+        <button type="button" onClick={() => void onSkip(e)} data-testid="skip-this"
+          className="press mt-4 min-h-12 w-full rounded-xl border border-line font-semibold">{t.edit.skipThis}</button>
+      )}
 
       <div className="mt-5 flex gap-2">
         <button type="button" onClick={() => void onDelete(e)} className="press min-h-12 rounded-xl border border-line px-4 font-semibold text-bad">{t.delete}</button>
