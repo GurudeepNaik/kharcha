@@ -21,6 +21,8 @@ import { YearView } from "./YearView";
 type Props = {
   rows: Expense[]; now: string; settings: Settings; repeats: { category: Category; amountPaise: number }[]; onOpen: (e: Expense) => void; isRepeating: (e: Expense) => boolean;
   onSettings: (s: Partial<Settings>) => Promise<void>;
+  /** Money in hand at the start and end of a month (null before it was set). */
+  handFor: (month: string) => { start: number | null; end: number; current: boolean } | null;
 };
 
 /** Month or Year, switched at the top. */
@@ -40,7 +42,7 @@ export function MonthView(props: Props) {
   );
 }
 
-function MonthBody({ rows, now, settings, repeats, onOpen, isRepeating, onSettings }: Props) {
+function MonthBody({ rows, now, settings, repeats, onOpen, isRepeating, onSettings, handFor }: Props) {
   const i = useI18n();
   const { t } = i;
   const current = monthOf(now);
@@ -63,6 +65,8 @@ function MonthBody({ rows, now, settings, repeats, onOpen, isRepeating, onSettin
   const daily = dailySpend(rows, month, now);
   const six = monthTotals(rows, month, 6);
   const isCurrent = month === current;
+  const hand = handFor(month);
+  const signed = (x: number) => `${x < 0 ? "−" : ""}${rupees(Math.abs(x))}`;
   const notes = insights(rows, month, now, repeats, settings.monthlyLimitPaise);
   const noteText = (n: Insight): string => {
     switch (n.kind) {
@@ -109,6 +113,12 @@ function MonthBody({ rows, now, settings, repeats, onOpen, isRepeating, onSettin
                 <dd className={`num font-bold ${left < 0 ? "text-bad" : ""}`} data-testid="month-left">{rupees(Math.abs(left))}</dd>
               </div>
             )}
+          </dl>
+        )}
+        {hand && (
+          <dl className="mt-3 space-y-1 border-t border-line pt-3" data-testid="month-hand">
+            {hand.start !== null && <div className="flex justify-between gap-3"><dt className="text-sm text-muted">{t.hand.started}</dt><dd className="num font-bold">{signed(hand.start)}</dd></div>}
+            <div className="flex justify-between gap-3"><dt className="text-sm text-muted">{hand.current ? t.hand.nowLabel : t.hand.ended}</dt><dd className={`num font-bold ${hand.end < 0 ? "text-bad" : ""}`} data-testid="month-hand-end">{signed(hand.end)}</dd></div>
           </dl>
         )}
         {isCurrent && settings.monthlyLimitPaise && <LimitLine spent={total} limit={settings.monthlyLimitPaise} month={month} now={now} />}

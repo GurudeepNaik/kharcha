@@ -1,5 +1,6 @@
 // Backup file, restore (with a preview of what changes) and the spreadsheet export.
 import { isCategory, isSpendCategory, kindOf, categoryLabel, type Category } from "./categories";
+import { validInHand } from "./inhand";
 import { validDate } from "./dates";
 import { MAX_PAISE, plainAmount } from "./money";
 import type { Debt } from "./debts";
@@ -24,7 +25,7 @@ export interface Backup {
   accounts: Account[]; transfers: Transfer[]; holdings: Holding[]; goals: Goal[]; plan: PlanItem[];
   /** Receipt photos, only when the person chose to include them: base64 JPEG/PNG/WebP. */
   photos: { id: string; type: string; data: string }[];
-  settings: Pick<Settings, "monthlyLimitPaise" | "categoryLimits" | "seniorSelf" | "seniorParents" | "upiAccount" | "cashAccount">;
+  settings: Pick<Settings, "monthlyLimitPaise" | "categoryLimits" | "seniorSelf" | "seniorParents" | "upiAccount" | "cashAccount" | "inHand">;
 }
 
 export interface BackupExtra { accounts?: Account[]; transfers?: Transfer[]; holdings?: Holding[]; goals?: Goal[]; plan?: PlanItem[]; photos?: { id: string; type: string; data: string }[] }
@@ -36,7 +37,7 @@ export function makeBackup(expenses: Expense[], learned: Map<string, Category>, 
     learned: [...learned].map(([word, category]) => ({ word, category })),
     settings: {
       monthlyLimitPaise: settings.monthlyLimitPaise, categoryLimits: settings.categoryLimits, seniorSelf: settings.seniorSelf, seniorParents: settings.seniorParents,
-      upiAccount: settings.upiAccount, cashAccount: settings.cashAccount,
+      upiAccount: settings.upiAccount, cashAccount: settings.cashAccount, inHand: settings.inHand,
     },
   };
 }
@@ -203,7 +204,7 @@ export function readBackup(text: string): { ok: true; value: Backup } | { ok: fa
   const limit = s.monthlyLimitPaise;
   const monthlyLimitPaise = typeof limit === "number" && Number.isInteger(limit) && limit > 0 && limit <= MAX_PAISE ? limit : null;
   return { ok: true, value: { kind: BACKUP_KIND, version: b.version, exportedAt: String(b.exportedAt ?? ""), expenses, learned, repeats, debts, accounts, transfers, holdings, goals, plan, photos,
-    settings: { monthlyLimitPaise, categoryLimits, seniorSelf: s.seniorSelf === true, seniorParents: s.seniorParents === true, upiAccount: acct(s.upiAccount), cashAccount: acct(s.cashAccount) } } };
+    settings: { monthlyLimitPaise, categoryLimits, seniorSelf: s.seniorSelf === true, seniorParents: s.seniorParents === true, upiAccount: acct(s.upiAccount), cashAccount: acct(s.cashAccount), inHand: validInHand(s.inHand) } } };
 }
 
 /** What a restore would do: new rows, rows where the backup's copy is newer, and rows already the same or newer here. */

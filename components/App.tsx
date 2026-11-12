@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { monthInHand } from "@/lib/inhand";
 import { APP_NAME } from "@/lib/brand";
 import { isIncomeCategory, isSpendCategory, keyWord, kindOf, type Category } from "@/lib/categories";
 import { monthOf, today } from "@/lib/dates";
@@ -399,13 +400,14 @@ export function App() {
                 </button>
               </div>
             )}
-            <HomeView rows={rows} now={now} settings={settings} plan={plan} onSkip={skipPlan} onPayments={() => go("payments")} onOpen={setEditing} onMonth={() => go("month")} onBackup={() => go("settings")} isRepeating={isRepeating} />
+            <HomeView rows={rows} debts={debts} accounts={accounts} transfers={transfers} onInHand={async v => { await updateSettings({ inHand: v }); say(t.hand.saved(v.paise)); }} now={now} settings={settings} plan={plan} onSkip={skipPlan} onPayments={() => go("payments")} onOpen={setEditing} onMonth={() => go("month")} onBackup={() => go("settings")} isRepeating={isRepeating} />
             <AddBox ref={addBox} now={now} learned={learned} typing={typing} accounts={accounts} settings={settings} onAdd={add} onDebt={addDebt} />
           </>
         )}
         {tab === "payments" && <PaymentsView items={plan} rows={rows} now={now} accounts={accounts} onPay={payPlan} onSkip={skipPlan}
           onRemovePayment={e => remove(e)} onSaveItem={savePlan} onDeleteItem={deletePlan} />}
-        {tab === "month" && <MonthView rows={rows} now={now} settings={settings} repeats={plan.filter(x => x.every === 1 && x.amountPaise && x.kind !== "income").map(x => ({ category: x.category, amountPaise: x.amountPaise! }))} onOpen={setEditing} isRepeating={isRepeating} onSettings={updateSettings} />}
+        {tab === "month" && <MonthView rows={rows} now={now} settings={settings} repeats={plan.filter(x => x.every === 1 && x.amountPaise && x.kind !== "income").map(x => ({ category: x.category, amountPaise: x.amountPaise! }))} onOpen={setEditing} isRepeating={isRepeating} onSettings={updateSettings}
+          handFor={m => (settings.inHand ? monthInHand(settings.inHand, rows, debts, accounts, transfers, m, now) : null)} />}
         {tab === "wealth" && (
           <>
             <WealthView rows={rows} now={now} accounts={accounts} transfers={transfers} holdings={holdings} goals={goals} settings={settings} planLoans={planLoans}
@@ -429,6 +431,7 @@ export function App() {
               if (!Object.keys(settings.categoryLimits).length && Object.keys(p.backup.settings.categoryLimits).length) patch.categoryLimits = p.backup.settings.categoryLimits;
               if (!settings.upiAccount && b.settings.upiAccount) patch.upiAccount = b.settings.upiAccount;
               if (!settings.cashAccount && b.settings.cashAccount) patch.cashAccount = b.settings.cashAccount;
+              if (!settings.inHand && b.settings.inHand) patch.inHand = b.settings.inHand;
               if (Object.keys(patch).length) await updateSettings(patch);
               const [r, l, d, ac, tr, ho, go, pl] = await Promise.all([allExpenses(), learnedMap(), allDebts(), all("accounts"), all("transfers"), all("holdings"), all("goals"), all("plan")]);
               setRows(r); setLearned(l); setDebts(d); setAccounts(ac); setTransfers(tr); setHoldings(ho); setGoals(go); setPlan(pl);

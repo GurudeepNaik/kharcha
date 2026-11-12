@@ -1,3 +1,4 @@
+import type { InHand } from "./inhand";
 import type { Category, SpendCategory } from "./categories";
 import type { TaxTag } from "./tax";
 import type { Method } from "./parse";
@@ -39,5 +40,7 @@ export interface Settings {
   monthlyLimitPaise: number | null; lastBackupAt: string | null; categoryLimits: CategoryLimits; seniorSelf: boolean; seniorParents: boolean;
   /** Accounts new entries use: UPI payments → upiAccount, cash → cashAccount. */
   upiAccount: string | null; cashAccount: string | null;
+  /** Money in hand when you last typed it; see lib/inhand.ts. */
+  inHand: InHand | null;
 }
-export const DEFAULT_SETTINGS: Settings = { monthlyLimitPaise: null, lastBackupAt: null, categoryLimits: {}, seniorSelf: false, seniorParents: false, upiAccount: null, cashAccount: null };
+export const DEFAULT_SETTINGS: Settings = { monthlyLimitPaise: null, lastBackupAt: null, categoryLimits: {}, seniorSelf: false, seniorParents: false, upiAccount: null, cashAccount: null, inHand: null };

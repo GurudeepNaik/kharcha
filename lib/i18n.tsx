@@ -124,6 +124,13 @@ const en = {
     home: "Payments this month", homeText: (done: number, of: number, left: number) => `${done} of ${of} done · ${r(left)} still to pay`, open: "Open",
     partOf: (name: string) => `Part of Payments: ${name}`, back: "Back",
   },
+  hand: {
+    title: "In hand", help: "Bank and cash together. Every entry updates it, and what's left carries into next month.",
+    ask: "How much money do you have right now?", askHelp: "Add up your bank balance and cash. You only type this once.", label: "Money you have now (₹)", save: "Save",
+    fix: "Correct it", fixTitle: "What do you have right now?", cancel: "Cancel",
+    brought: (m: string, x: number) => `From ${m}: ${x < 0 ? "−" : ""}${r(Math.abs(x))}`, cameIn: (x: number) => `+${r(x)} in`, wentOut: (x: number) => `−${r(x)} out`,
+    started: "Started with", ended: "Ended with", nowLabel: "In hand now", saved: (x: number) => `In hand set to ${r(x)}`,
+  },
   wealth: {
     title: "Wealth", netWorth: "Net worth", accounts: "Accounts", owned: "Investments and property", owed: "Loans",
     netHelp: "Account balances plus what you own, minus loans. Everything here is typed in by you.",
@@ -319,6 +326,13 @@ const hi: Msg = {
     home: "इस महीने के भुगतान", homeText: (done, of, left) => `${of} में से ${done} पूरे · ${r(left)} बाकी`, open: "खोलें",
     partOf: name => `भुगतान का हिस्सा: ${name}`, back: "वापस",
   },
+  hand: {
+    title: "हाथ में", help: "बैंक और नकद मिलाकर। हर एंट्री से यह बदलता है, और बचा हुआ अगले महीने में जाता है।",
+    ask: "अभी आपके पास कितने पैसे हैं?", askHelp: "बैंक बैलेंस और नकद जोड़ें। यह सिर्फ एक बार लिखना है।", label: "अभी के पैसे (₹)", save: "सेव करें",
+    fix: "ठीक करें", fixTitle: "अभी आपके पास कितना है?", cancel: "रद्द करें",
+    brought: (m: string, x: number) => `${m} से: ${x < 0 ? "−" : ""}${r(Math.abs(x))}`, cameIn: (x: number) => `+${r(x)} आए`, wentOut: (x: number) => `−${r(x)} गए`,
+    started: "शुरुआत में", ended: "आखिर में", nowLabel: "अभी हाथ में", saved: (x: number) => `हाथ में ${r(x)} सेट किया`,
+  },
   wealth: {
     title: "संपत्ति", netWorth: "कुल संपत्ति", accounts: "खाते", owned: "निवेश और जायदाद", owed: "कर्ज़",
     netHelp: "खातों का बैलेंस, जो आपके पास है उसे जोड़कर, कर्ज़ घटाकर। सब कुछ आप खुद लिखते हैं।",
@@ -511,6 +525,13 @@ const kn: Msg = {
     tMoved: "ನಿಮ್ಮ “ಪ್ರತಿ ತಿಂಗಳು” ಐಟಂಗಳು ಈಗ ಪಾವತಿಗಳಲ್ಲಿವೆ.", tDeleted: name => `${name} ಅಳಿಸಲಾಗಿದೆ`,
     home: "ಈ ತಿಂಗಳ ಪಾವತಿಗಳು", homeText: (done, of, left) => `${of} ರಲ್ಲಿ ${done} ಮುಗಿದಿದೆ · ${r(left)} ಇನ್ನೂ ಕಟ್ಟಬೇಕು`, open: "ತೆರೆಯಿರಿ",
     partOf: name => `ಪಾವತಿಗಳ ಭಾಗ: ${name}`, back: "ಹಿಂದೆ",
+  },
+  hand: {
+    title: "ಕೈಯಲ್ಲಿ", help: "ಬ್ಯಾಂಕ್ ಮತ್ತು ನಗದು ಸೇರಿ. ಪ್ರತಿ ನಮೂದು ಇದನ್ನು ಬದಲಾಯಿಸುತ್ತದೆ, ಉಳಿದದ್ದು ಮುಂದಿನ ತಿಂಗಳಿಗೆ ಹೋಗುತ್ತದೆ.",
+    ask: "ಈಗ ನಿಮ್ಮ ಬಳಿ ಎಷ್ಟು ಹಣ ಇದೆ?", askHelp: "ಬ್ಯಾಂಕ್ ಬ್ಯಾಲೆನ್ಸ್ ಮತ್ತು ನಗದು ಸೇರಿಸಿ. ಇದನ್ನು ಒಮ್ಮೆ ಮಾತ್ರ ಬರೆಯಬೇಕು.", label: "ಈಗಿರುವ ಹಣ (₹)", save: "ಉಳಿಸಿ",
+    fix: "ಸರಿಪಡಿಸಿ", fixTitle: "ಈಗ ನಿಮ್ಮ ಬಳಿ ಎಷ್ಟಿದೆ?", cancel: "ರದ್ದು",
+    brought: (m: string, x: number) => `${m} ನಿಂದ: ${x < 0 ? "−" : ""}${r(Math.abs(x))}`, cameIn: (x: number) => `+${r(x)} ಬಂತು`, wentOut: (x: number) => `−${r(x)} ಹೋಯಿತು`,
+    started: "ಆರಂಭದಲ್ಲಿ", ended: "ಕೊನೆಯಲ್ಲಿ", nowLabel: "ಈಗ ಕೈಯಲ್ಲಿ", saved: (x: number) => `ಕೈಯಲ್ಲಿ ${r(x)} ಹೊಂದಿಸಲಾಗಿದೆ`,
   },
   wealth: {
     title: "ಸಂಪತ್ತು", netWorth: "ನಿವ್ವಳ ಸಂಪತ್ತು", accounts: "ಖಾತೆಗಳು", owned: "ಹೂಡಿಕೆ ಮತ್ತು ಆಸ್ತಿ", owed: "ಸಾಲಗಳು",

@@ -11,14 +11,19 @@ import { rupees } from "@/lib/money";
 import { EMPTY_FILTER, filterRows, isFiltering, type Filter } from "@/lib/search";
 import { byCategory, byDay, incomes, inMonth, invests, onDay, spends, sum } from "@/lib/totals";
 import type { Expense, Settings } from "@/lib/types";
+import { InHandCard } from "./InHandCard";
 import { LimitLine } from "./LimitLine";
+import type { Debt } from "@/lib/debts";
+import type { InHand } from "@/lib/inhand";
+import type { Account, Transfer } from "@/lib/wealth";
 import { Icon, SpendRow, Svg, card } from "./ui";
 
 const PAGE = 60;
 const DAY_MS = 86_400_000;
 
-export function HomeView({ rows, now, settings, plan, onSkip, onPayments, onOpen, onMonth, onBackup, isRepeating }: {
-  rows: Expense[]; now: string; settings: Settings; plan: PlanItem[]; onSkip: (it: PlanItem, month: string, skip: boolean) => Promise<void>; onPayments: () => void;
+export function HomeView({ rows, debts, accounts, transfers, onInHand, now, settings, plan, onSkip, onPayments, onOpen, onMonth, onBackup, isRepeating }: {
+  rows: Expense[]; debts: Debt[]; accounts: Account[]; transfers: Transfer[]; onInHand: (v: InHand) => Promise<void>;
+  now: string; settings: Settings; plan: PlanItem[]; onSkip: (it: PlanItem, month: string, skip: boolean) => Promise<void>; onPayments: () => void;
   onOpen: (e: Expense) => void; onMonth: () => void; onBackup: () => void; isRepeating: (e: Expense) => boolean;
 }) {
   const i = useI18n();
@@ -65,6 +70,7 @@ export function HomeView({ rows, now, settings, plan, onSkip, onPayments, onOpen
           <p className="num mt-0.5 text-2xl font-bold" data-testid="home-month-total">{rupees(monthSpent)}</p>
         </button>
       </div>
+      <InHandCard value={settings.inHand} rows={rows} debts={debts} accounts={accounts} transfers={transfers} now={now} onSet={onInHand} />
       {(monthIn > 0 || monthInvest > 0) && (
         <dl className={`mt-3 space-y-1.5 ${card} p-4`} data-testid="money-in">
           {monthIn > 0 && <div className="flex items-baseline justify-between gap-3"><dt className="text-sm text-muted">{t.home.moneyIn}</dt><dd className="num text-lg font-bold text-accent">+{rupees(monthIn)}</dd></div>}

@@ -401,7 +401,7 @@ ok("a damaged file is refused", (await text(fresh, "[role=alert]")).includes("da
 {
   await clickText(page, "Home", "nav button");
   await page.waitForSelector("#entry");
-  await page.click("button[aria-controls=search-panel]");
+  await tap(page, "button[aria-controls=search-panel]");
   await page.type("#q", "swiggy");
   await wait(200);
   ok("search finds swiggy (1 entry)", (await text(page, "[data-testid=search-summary]")).startsWith("1 entry"));
@@ -654,6 +654,42 @@ ok("a damaged file is refused", (await text(fresh, "[role=alert]")).includes("da
   await clickText(page, "Month", "nav button"); await page.waitForSelector("[data-testid=mode-month]");
   ok("Month shows Notes (fixed monthly payments)", (await text(page, "[data-testid=notes]")).includes("Fixed monthly payments"));
   await clickText(page, "Home", "nav button"); await page.waitForSelector("#entry");
+}
+
+// ---------- In hand: what you have now, carried into next month ----------
+{
+  const p = await phone();
+  const now = async () => paise(await text(p, "[data-testid=inhand-now]"));
+  ok("Home asks how much you have", !!(await p.$("[data-testid=inhand-form]")));
+  await p.type("#inhand-amt", "20,000"); await tap(p, "[data-testid=inhand-save]");
+  await p.waitForSelector("[data-testid=inhand-now]");
+  ok("in hand set to ₹20,000", (await now()) === 20000_00);
+  await add(p, "chai 50"); await add(p, "salary 1000"); await add(p, "sip 500"); await add(p, "lent ravi 200"); await wait(300);
+  ok("spend, salary, SIP and lending all update in hand (₹20,250)", (await now()) === 20250_00);
+  ok("this month's in and out shown", (await text(p, "[data-testid=inhand-month]")) === "+₹1,000 in · −₹750 out");
+  await tap(p, "[data-testid=inhand-fix]");
+  await p.click("#inhand-amt", { count: 3 }); await p.keyboard.press("Backspace"); await p.type("#inhand-amt", "30000"); await tap(p, "[data-testid=inhand-save]");
+  await p.waitForSelector("[data-testid=inhand-now]"); await wait(200);
+  ok("correcting it sets the new amount", (await now()) === 30000_00);
+  await add(p, "auto 40"); await wait(200);
+  ok("entries after the correction still count", (await now()) === 29960_00);
+  // Started last month: what was left comes over.
+  await p.evaluate(() => new Promise<void>((res, rej) => {
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-15`;
+    const r = indexedDB.open("expenses");
+    r.onerror = () => rej(r.error);
+    r.onsuccess = () => { const tx = r.result.transaction("settings", "readwrite"); tx.objectStore("settings").put({ paise: 1000000, date: day, at: `${day}T00:00:00.000Z` }, "inHand"); tx.oncomplete = () => { r.result.close(); res(); }; };
+  }));
+  await p.reload({ waitUntil: "networkidle2" }); await p.waitForSelector("[data-testid=inhand-now]");
+  const line = await text(p, "[data-testid=inhand-month]");
+  ok(`last month's ₹10,000 carried over (${line})`, /^From \S+: ₹10,000 · \+₹1,000 in · −₹790 out$/.test(line));
+  ok("in hand now = 10,000 + 1,000 − 790", (await now()) === 10210_00);
+  await clickText(p, "Month", "nav button"); await p.waitForSelector("[data-testid=month-hand]");
+  const mh = await text(p, "[data-testid=month-hand]");
+  ok(`Month shows started with and in hand now (${mh})`, mh.includes("Started with₹10,000") && mh.includes("In hand now₹10,210"));
+  ok("no sideways scroll", await noOverflow(p));
+  await p.close();
 }
 
 // ---------- Phone widths, keyboard ----------

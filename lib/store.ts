@@ -1,5 +1,6 @@
 // Everything is saved in the browser's IndexedDB on this phone. Nothing is sent anywhere.
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import { validInHand } from "./inhand";
 import type { Category } from "./categories";
 import { sortRows } from "./totals";
 import type { Debt } from "./debts";
@@ -68,7 +69,7 @@ export async function learn(word: string, category: Category) { await (await db(
 
 export async function getSettings(): Promise<Settings> {
   const d = await db();
-  const [limit, last, cats, ss, sp, ua, ca] = await Promise.all(["monthlyLimitPaise", "lastBackupAt", "categoryLimits", "seniorSelf", "seniorParents", "upiAccount", "cashAccount"].map(k => d.get("settings", k)));
+  const [limit, last, cats, ss, sp, ua, ca, ih] = await Promise.all(["monthlyLimitPaise", "lastBackupAt", "categoryLimits", "seniorSelf", "seniorParents", "upiAccount", "cashAccount", "inHand"].map(k => d.get("settings", k)));
   return {
     monthlyLimitPaise: typeof limit === "number" ? limit : DEFAULT_SETTINGS.monthlyLimitPaise,
     lastBackupAt: typeof last === "string" ? last : DEFAULT_SETTINGS.lastBackupAt,
@@ -77,6 +78,7 @@ export async function getSettings(): Promise<Settings> {
     seniorParents: sp === true,
     upiAccount: typeof ua === "string" ? ua : null,
     cashAccount: typeof ca === "string" ? ca : null,
+    inHand: validInHand(ih),
   };
 }
 export async function saveSettings(s: Partial<Settings>) {
