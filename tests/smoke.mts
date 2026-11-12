@@ -180,7 +180,8 @@ await page.keyboard.press("Escape");
   ok("Left = money in − spent − invested", paise(await text(page, "[data-testid=left]")) === Math.abs(inn - spent(m) - 1700000));
 }
 
-// ---------- Every month ----------
+// ---------- Every month (now in Payments) ----------
+const planStore = (pg: Page) => pg.evaluate(() => new Promise<{ id: string; name: string; skips: string[]; handledThrough: string | null }[]>(res => { const r = indexedDB.open("expenses"); r.onsuccess = () => { const q = r.result.transaction("plan").objectStore("plan").getAll(); q.onsuccess = () => { res(q.result); r.result.close(); }; }; }));
 {
   // Netflix from two months ago, set to repeat: the months since are added straight away.
   const d = new Date(); const back = new Date(d.getFullYear(), d.getMonth() - 2, 1);
@@ -191,16 +192,17 @@ await page.keyboard.press("Escape");
   await wait(1200);
   const nf = (await dbRows(page)).filter(r => r.note === "netflix");
   ok(`Every month: catches up to this month (3 entries: ${nf.map(r => r.date).join(", ")})`, nf.length === 3 && new Set(nf.map(r => r.date.slice(0, 7))).size === 3);
-  ok("all three are linked to one repeat", nf.every(r => r.repeatId && r.repeatId === nf[0]!.repeatId));
+  ok("all three are linked to one Payments item", nf.every(r => r.planId && r.planId === nf[0]!.planId));
   await page.reload({ waitUntil: "networkidle2" }); await page.waitForSelector("#entry"); await wait(600);
   ok("reopening the app adds nothing twice", (await dbRows(page)).filter(r => r.note === "netflix").length === 3);
-  await clickText(page, "Settings", "nav button");
-  await page.waitForSelector("[data-testid=repeats]");
-  ok("Settings lists it under Every month", (await text(page, "[data-testid=repeats]")).includes("netflix"));
-  await clickText(page, "Stop");
-  await wait(300);
-  ok("Stop removes it from the list", !(await page.$("[data-testid=repeats]")));
-  ok("stopping keeps the entries already added", (await dbRows(page)).filter(r => r.note === "netflix").length === 3);
+  await clickText(page, "Payments", "nav button");
+  await page.waitForSelector("[data-plan=netflix]");
+  ok("Payments lists it, paid this month", (await text(page, "[data-plan=netflix]")).includes("Paid ₹199"));
+  await tap(page, "[data-plan=netflix]"); await page.waitForSelector("[data-testid=pay-go]");
+  await clickText(page, "Edit details"); await page.waitForSelector("[data-testid=plan-save]");
+  await clickText(page, "Delete", "dialog button"); await wait(400);
+  ok("deleting it removes it from Payments", !(await page.$("[data-plan=netflix]")) && !(await planStore(page)).some(x => x.name === "netflix"));
+  ok("...and keeps the entries already added", (await dbRows(page)).filter(r => r.note === "netflix").length === 3);
   await clickText(page, "Home", "nav button");
   await page.waitForSelector("#entry");
   // Turning it on from the edit sheet.
@@ -209,34 +211,23 @@ await page.keyboard.press("Escape");
   await page.click("dialog input[type=checkbox]");
   await clickText(page, "Save changes");
   await wait(500);
-  ok("edit sheet can turn on Every month", !!(await dbRows(page)).find(r => r.id === chai.id)?.repeatId);
+  const chaiPlan = (await dbRows(page)).find(r => r.id === chai.id)?.planId;
+  ok("edit sheet can turn on Every month", !!chaiPlan);
   ok("row says Every month", (await text(page, `button[data-id="${chai.id}"]`)).includes("Every month"));
-
-  // Skip this month (on an entry a repeat added): the entry goes, the repeat stays.
   await openRow(page, chai.id);
+  ok("edit sheet says which payment it belongs to", (await text(page, "[data-testid=part-of]")).includes("chai"));
+
+  // Skip this month (on an entry Payments made): the entry goes, the item stays and the month is marked skipped.
   await page.click("[data-testid=skip-this]");
   await wait(400);
-  const ruleId = chai.repeatId ?? (await page.evaluate(() => new Promise<string>(res => { const r = indexedDB.open("expenses"); r.onsuccess = () => { const q = r.result.transaction("repeats").objectStore("repeats").getAll(); q.onsuccess = () => res(q.result.find((x: { note: string }) => x.note === "chai")?.id); }; })));
-  const reps = () => page.evaluate(() => new Promise<{ id: string; note: string; lastMonth: string }[]>(res => { const r = indexedDB.open("expenses"); r.onsuccess = () => { const q = r.result.transaction("repeats").objectStore("repeats").getAll(); q.onsuccess = () => { res(q.result); r.result.close(); }; }; }));
   ok("Skip this month removes the entry", !(await dbRows(page)).some(r => r.id === chai.id));
-  ok("...and keeps the repeat", (await reps()).some(r => r.id === ruleId));
+  const it = (await planStore(page)).find(x => x.id === chaiPlan)!;
+  ok("...keeps the item and marks the month skipped", !!it && it.skips.includes(t.slice(0, 7)));
   await clickText(page, "Undo");
   await wait(300);
-  ok("Undo brings the skipped entry back", (await dbRows(page)).some(r => r.id === chai.id));
+  ok("Undo brings the skipped entry back", (await dbRows(page)).some(r => r.id === chai.id) && !(await planStore(page)).find(x => x.id === chaiPlan)!.skips.length);
 
-  // Skip next (Settings): the rule moves on one month without adding anything.
-  const before = (await reps()).find(r => r.note === "chai")!;
-  await clickText(page, "Settings", "nav button");
-  await page.waitForSelector("[data-testid=skip-repeat]");
-  await page.click("[data-testid=skip-repeat]");
-  await wait(300);
-  const after = (await reps()).find(r => r.note === "chai")!;
-  const nm = (m: string) => { const [y, mo] = m.split("-").map(Number) as [number, number]; const d = new Date(y, mo, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
-  ok(`Skip next moves the repeat on a month (${before.lastMonth} → ${after.lastMonth})`, after.lastMonth === nm(before.lastMonth));
-  await clickText(page, "Home", "nav button");
-  await page.waitForSelector("#entry");
-
-  // Coming up (Home): a repeat due in 3 days shows with Skip.
+  // Coming up (Home): an item due in 3 days shows with Skip.
   const soon = new Date(); soon.setDate(soon.getDate() + 3);
   const lastMonth = new Date(soon.getFullYear(), soon.getMonth() - 1, Math.min(soon.getDate(), 28));
   await enter(page, `broadband 799 ${lastMonth.getDate()}/${lastMonth.getMonth() + 1}/${lastMonth.getFullYear()}`);
@@ -364,7 +355,7 @@ ok("a damaged file is refused", (await text(fresh, "[role=alert]")).includes("da
   await page.keyboard.press("Enter");
   await wait(400);
   ok("a loan doesn't change spending", paise(await text(page, "[data-testid=today-total]")) === spentToday);
-  await clickText(page, "People", "nav button");
+  await clickText(page, "Wealth", "nav button");
   await page.waitForSelector("#p-name");
   ok("People: you owe ₹200", (await text(page, "[data-testid=you-owe]")) === "₹200");
   await page.type("#p-name", "Ravi"); await page.type("#p-amount", "500");
@@ -459,10 +450,115 @@ ok("a damaged file is refused", (await text(fresh, "[role=alert]")).includes("da
   await p.evaluate(() => (document.querySelector("input[name=lang][value=kn]") as HTMLElement).click());
   await wait(300);
   ok("Kannada: bottom bar reads ಮುಖಪುಟ", (await text(p, "[data-tab=home]")) === "ಮುಖಪುಟ");
-  for (const tab of ["home", "month", "wealth", "people", "settings"]) {
+  for (const tab of ["home", "payments", "month", "wealth", "settings"]) {
     await p.evaluate((k: string) => (document.querySelector(`[data-tab=${k}]`) as HTMLElement).click(), tab); await wait(250);
   }
   ok("Kannada: no sideways scroll on any screen", await noOverflow(p));
+  await p.close();
+}
+
+// ---------- Upgrade: an older install's "Every month" items move into Payments ----------
+{
+  const ctx = await browser.createBrowserContext();
+  const p = await ctx.newPage();
+  await p.evaluateOnNewDocument("globalThis.__name = f => f");
+  await p.goto(`${BASE}/robots.txt`);
+  // The database as the previous version left it (v4), with one repeat and the entry it made.
+  await p.evaluate(() => new Promise<void>((res, rej) => {
+    const r = indexedDB.open("expenses", 4);
+    r.onupgradeneeded = () => {
+      const d = r.result;
+      d.createObjectStore("expenses", { keyPath: "id" }).createIndex("date", "date");
+      for (const n of ["learned"]) d.createObjectStore(n, { keyPath: "word" });
+      d.createObjectStore("settings");
+      for (const n of ["repeats", "debts", "accounts", "transfers", "holdings", "goals", "photos"]) d.createObjectStore(n, { keyPath: "id" });
+    };
+    r.onsuccess = () => {
+      const now = new Date(); const m = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const tx = r.result.transaction(["repeats", "expenses"], "readwrite");
+      tx.objectStore("repeats").put({ id: "rrrrrrrr-0000-4000-8000-000000000001", amountPaise: 79900, note: "wifi", category: "bills", method: null, day: 1, lastMonth: m, createdAt: "2026-01-01T00:00:00.000Z" });
+      tx.objectStore("expenses").put({ id: "eeeeeeee-0000-4000-8000-000000000001", amountPaise: 79900, note: "wifi", category: "bills", method: null, date: `${m}-01`, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", repeatId: "rrrrrrrr-0000-4000-8000-000000000001" });
+      tx.oncomplete = () => { r.result.close(); res(); };
+      tx.onerror = () => rej(tx.error);
+    };
+  }));
+  await p.goto(BASE, { waitUntil: "networkidle2" }); await p.waitForSelector("#entry"); await wait(600);
+  const moved = await planStore(p);
+  ok("old 'Every month' item is now in Payments (same id)", moved.length === 1 && moved[0]!.id === "rrrrrrrr-0000-4000-8000-000000000001" && moved[0]!.name === "wifi");
+  ok("you're told it moved", (await text(p, "[role=status]")).includes("now in Payments"));
+  await clickText(p, "Payments", "nav button"); await p.waitForSelector("[data-plan=wifi]");
+  ok("its old entry still counts as this month's payment", (await text(p, "[data-plan=wifi]")).includes("Paid ₹799"));
+  await p.reload({ waitUntil: "networkidle2" }); await wait(500);
+  ok("nothing added twice after reopening", (await dbRows(p)).length === 1 && (await planStore(p)).length === 1);
+  await ctx.close();
+}
+
+// ---------- Payments: salary, loans, SIP, insurance, bills ----------
+{
+  const p = await phone();
+  const D = new Date().getDate();
+  await clickText(p, "Payments", "nav button");
+  await p.waitForSelector("[data-testid=plan-add-empty]");
+  const addItem = async (type: string, fill: Record<string, string>, pickName?: string, startEmpty = false) => {
+    await tap(p, startEmpty ? "[data-testid=plan-add-empty]" : "[data-testid=plan-add]");
+    await p.waitForSelector("[data-testid=plan-types]");
+    await clickText(p, type, "[data-testid=plan-types] button span"); // the tile's title
+    await p.waitForSelector("[data-testid=plan-save]");
+    if (pickName) await clickText(p, pickName, "[data-testid=plan-picks] button");
+    for (const [id, v] of Object.entries(fill)) { await p.click(`#${id}`, { count: 3 }); await p.keyboard.press("Backspace"); await p.type(`#${id}`, v); }
+    await p.click("[data-testid=plan-save]"); await wait(500);
+  };
+  await addItem("Salary", { "pl-amount": "85000", "pl-day": "1" }, undefined, true);
+  await addItem("Loan with EMI", { "pl-principal": "100000", "pl-rate": "12", "pl-amount": "10000", "pl-day": String(D) });
+  await addItem("Gold loan", { "pl-principal": "50000", "pl-rate": "9" });
+  await addItem("SIP", { "pl-amount": "5000", "pl-day": String(Math.min(D + 1, 28)) });
+  await addItem("Bill or subscription", { "pl-amount": "649", "pl-day": String(D) }, "Netflix");
+  await addItem("Bill or subscription", {}, "Bike petrol");
+  const items = await planStore(p);
+  ok(`6 monthly items saved (${items.map(x => x.name).join(", ")})`, items.length === 6);
+  await wait(800);
+  const rws = await dbRows(p);
+  ok("Netflix (auto, due today) is paid by itself", rws.some(r => r.note === "Netflix" && r.amountPaise === 64900 && r.planId) && (await text(p, "[data-plan=Netflix]")).includes("Paid ₹649"));
+
+  // Salary received → what's left after payments.
+  await tap(p, "[data-plan=Salary]"); await p.waitForSelector("[data-testid=pay-go]");
+  ok("salary box suggests ₹85,000", (await p.$eval("#pay-amount", e => (e as HTMLInputElement).value)) === "85000");
+  await p.click("[data-testid=pay-go]"); await wait(400);
+  ok("salary saved as money in, linked", (await dbRows(p)).some(r => r.category === "salary" && r.amountPaise === 8500000 && r.planId));
+  ok("summary says what's left after all payments", (await text(p, "[data-testid=plan-free]")).startsWith("After all payments"));
+
+  // Loan with EMI: what's left, months to go, a pay-more tip; then pay the EMI.
+  await tap(p, "[data-plan='Personal loan']"); await p.waitForSelector("[data-testid=loan-info]");
+  const li = await text(p, "[data-testid=loan-info]");
+  ok("loan shows ₹1,00,000 left and EMIs to go", li.includes("Left to pay: ₹1,00,000") && /\d+ more EMIs/.test(li));
+  ok("loan shows a pay-more tip", (await text(p, "[data-testid=loan-tip]")).startsWith("Pay ₹1,000 more a month"));
+  await p.click("[data-testid=pay-go]"); await wait(400);
+  ok("EMI paid: ₹10,000 entry under Rent & EMI", (await dbRows(p)).some(r => r.category === "rent" && r.amountPaise === 1000000 && r.planId));
+  ok("loan row now says ₹90,000 left", (await text(p, "[data-plan='Personal loan']")).includes("Left to pay: ₹90,000"));
+
+  // Gold loan: total to close today, pay any amount.
+  await tap(p, "[data-plan='Gold loan']"); await p.waitForSelector("[data-testid=loan-info]");
+  ok("gold loan: ₹50,000 to close today", (await text(p, "[data-testid=loan-info]")).includes("To close today: ₹50,000"));
+  await p.keyboard.press("Escape"); await wait(200);
+
+  // SIP: skip this month.
+  await tap(p, "[data-plan=SIP]"); await p.waitForSelector("[data-testid=pay-skip]");
+  await p.click("[data-testid=pay-skip]"); await wait(400);
+  ok("SIP skipped this month", (await text(p, "[data-plan=SIP]")).includes("Skipped this month"));
+
+  // Smart: typing "bike petrol 450" on Home ticks off Bike petrol.
+  await clickText(p, "Home", "nav button"); await p.waitForSelector("#entry");
+  await add(p, "bike petrol 450");
+  const bikeId = (await planStore(p)).find(x => x.name === "Bike petrol")!.id;
+  ok("'bike petrol 450' counts as the Bike petrol payment", (await dbRows(p)).some(r => r.note === "bike petrol" && r.planId === bikeId));
+  ok("Home shows this month's payments", (await text(p, "[data-testid=home-payments]")).includes("done"));
+
+  // Loans count in net worth.
+  await clickText(p, "Wealth", "nav button"); await p.waitForSelector("[data-testid=plan-loans]");
+  ok("Wealth lists both loans from Payments", (await text(p, "[data-testid=plan-loans]")).includes("Personal loan") && (await text(p, "[data-testid=plan-loans]")).includes("Gold loan"));
+  ok("net worth = −(₹90,000 + ₹50,000)", (await text(p, "[data-testid=networth-total]")) === "−₹1,40,000");
+  await clickText(p, "Payments", "nav button"); await wait(300);
+  ok("Payments: no sideways scroll", await noOverflow(p));
   await p.close();
 }
 
@@ -556,7 +652,7 @@ ok("a damaged file is refused", (await text(fresh, "[role=alert]")).includes("da
 {
   // Notes need a few entries: the first browser's data has them.
   await clickText(page, "Month", "nav button"); await page.waitForSelector("[data-testid=mode-month]");
-  ok("Month shows Notes (a repeat is on)", (await text(page, "[data-testid=notes]")).includes("goes out every month"));
+  ok("Month shows Notes (fixed monthly payments)", (await text(page, "[data-testid=notes]")).includes("Fixed monthly payments"));
   await clickText(page, "Home", "nav button"); await page.waitForSelector("#entry");
 }
 
@@ -569,8 +665,8 @@ for (const w of [320, 390]) {
   ok(`${w}px: no sideways scroll on Month`, await noOverflow(p));
   await clickText(p, "Wealth", "nav button"); await wait(200);
   ok(`${w}px: no sideways scroll on Wealth`, await noOverflow(p));
-  await clickText(p, "People", "nav button"); await wait(200);
-  ok(`${w}px: no sideways scroll on People`, await noOverflow(p));
+  await clickText(p, "Payments", "nav button"); await wait(200);
+  ok(`${w}px: no sideways scroll on Payments`, await noOverflow(p));
   await clickText(p, "Settings", "nav button"); await wait(200);
   ok(`${w}px: no sideways scroll on Settings`, await noOverflow(p));
   await clickText(p, "Home", "nav button"); await wait(200);

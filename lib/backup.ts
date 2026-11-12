@@ -4,11 +4,12 @@ import { validDate } from "./dates";
 import { MAX_PAISE, plainAmount } from "./money";
 import type { Debt } from "./debts";
 import { HOLDING_KINDS, type Account, type Goal, type Holding, type Transfer } from "./wealth";
+import type { PlanItem } from "./plan";
 import { isTaxTag } from "./tax";
 import type { CategoryLimits, Expense, Repeat, Settings } from "./types";
 
 export const BACKUP_KIND = "expense-tracker-backup";
-export const BACKUP_VERSION = 4; // 2: money in, repeats. 3: lending, budgets. 4: accounts, transfers, net worth, goals, photos. Older files still restore.
+export const BACKUP_VERSION = 5; // 2: money in, repeats. 3: lending, budgets. 4: accounts, transfers, net worth, goals, photos. 5: monthly payments. Older files still restore.
 export const MAX_BACKUP_BYTES = 200 * 1024 * 1024; // receipt photos make backups bigger
 const MAX_ROWS = 200_000;
 
@@ -20,18 +21,18 @@ export interface Backup {
   learned: { word: string; category: Category }[];
   repeats: Repeat[];
   debts: Debt[];
-  accounts: Account[]; transfers: Transfer[]; holdings: Holding[]; goals: Goal[];
+  accounts: Account[]; transfers: Transfer[]; holdings: Holding[]; goals: Goal[]; plan: PlanItem[];
   /** Receipt photos, only when the person chose to include them: base64 JPEG/PNG/WebP. */
   photos: { id: string; type: string; data: string }[];
   settings: Pick<Settings, "monthlyLimitPaise" | "categoryLimits" | "seniorSelf" | "seniorParents" | "upiAccount" | "cashAccount">;
 }
 
-export interface BackupExtra { accounts?: Account[]; transfers?: Transfer[]; holdings?: Holding[]; goals?: Goal[]; photos?: { id: string; type: string; data: string }[] }
+export interface BackupExtra { accounts?: Account[]; transfers?: Transfer[]; holdings?: Holding[]; goals?: Goal[]; plan?: PlanItem[]; photos?: { id: string; type: string; data: string }[] }
 
 export function makeBackup(expenses: Expense[], learned: Map<string, Category>, settings: Settings, repeats: Repeat[] = [], debts: Debt[] = [], extra: BackupExtra = {}, now = new Date()): Backup {
   return {
     kind: BACKUP_KIND, version: BACKUP_VERSION, exportedAt: now.toISOString(), expenses, repeats, debts,
-    accounts: extra.accounts ?? [], transfers: extra.transfers ?? [], holdings: extra.holdings ?? [], goals: extra.goals ?? [], photos: extra.photos ?? [],
+    accounts: extra.accounts ?? [], transfers: extra.transfers ?? [], holdings: extra.holdings ?? [], goals: extra.goals ?? [], plan: extra.plan ?? [], photos: extra.photos ?? [],
     learned: [...learned].map(([word, category]) => ({ word, category })),
     settings: {
       monthlyLimitPaise: settings.monthlyLimitPaise, categoryLimits: settings.categoryLimits, seniorSelf: settings.seniorSelf, seniorParents: settings.seniorParents,
@@ -71,6 +72,28 @@ function validGoal(x: unknown): Goal | null {
   for (const a of o.added) { const r = obj(a); if (!r || !ymd(r.date) || !(typeof r.paise === "number" && Number.isInteger(r.paise) && Math.abs(r.paise) <= MAX_PAISE)) return null; added.push({ date: r.date as string, paise: r.paise }); }
   return { id: o.id as string, name: o.name as string, targetPaise: o.targetPaise as number, byMonth: o.byMonth as string | null, added, createdAt: o.createdAt as string, updatedAt: o.updatedAt as string };
 }
+const PLAN_KINDS = ["income", "loan", "goldloan", "invest", "insurance", "bill"];
+const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+function validPlan(x: unknown): PlanItem | null {
+  const o = obj(x); if (!o) return null;
+  if (!str(o.id, 64) || !ID.test(o.id as string) || !str(o.name, 40) || !PLAN_KINDS.includes(o.kind as string) || !isCategory(o.category)) return null;
+  if (!(o.amountPaise === null || paise(o.amountPaise))) return null;
+  if (typeof o.day !== "number" || !Number.isInteger(o.day) || o.day < 1 || o.day > 31 || ![1, 3, 6, 12].includes(o.every as number)) return null;
+  if (typeof o.startMonth !== "string" || !MONTH.test(o.startMonth) || typeof o.autoPay !== "boolean") return null;
+  if (!(o.handledThrough === null || (typeof o.handledThrough === "string" && MONTH.test(o.handledThrough)))) return null;
+  if (!Array.isArray(o.skips) || o.skips.length > 600 || !o.skips.every(m => typeof m === "string" && MONTH.test(m))) return null;
+  if (!(o.accountId === null || (typeof o.accountId === "string" && ID.test(o.accountId)))) return null;
+  let loan: PlanItem["loan"] = null;
+  if (o.loan !== null) {
+    const l = obj(o.loan); if (!l) return null;
+    if (!paise(l.principalPaise, 0) || typeof l.ratePct !== "number" || !(l.ratePct >= 0 && l.ratePct <= 60) || !ymd(l.since) || !(l.endBy === null || ymd(l.endBy))) return null;
+    loan = { principalPaise: l.principalPaise as number, ratePct: l.ratePct, since: l.since as string, endBy: l.endBy as string | null };
+  }
+  if (!stamps(o)) return null;
+  return { id: o.id as string, name: o.name as string, kind: o.kind as PlanItem["kind"], category: o.category as PlanItem["category"], amountPaise: o.amountPaise as number | null,
+    day: o.day, every: o.every as PlanItem["every"], startMonth: o.startMonth, autoPay: o.autoPay, handledThrough: o.handledThrough as string | null,
+    skips: o.skips as string[], accountId: o.accountId as string | null, loan, createdAt: o.createdAt as string, updatedAt: o.updatedAt as string };
+}
 function validPhoto(x: unknown): { id: string; type: string; data: string } | null {
   const o = obj(x); if (!o) return null;
   if (typeof o.id !== "string" || !ID.test(o.id) || !["image/jpeg", "image/png", "image/webp"].includes(o.type as string) || typeof o.data !== "string" || !/^[A-Za-z0-9+/=]+$/.test(o.data) || o.data.length > 8_000_000) return null;
@@ -105,6 +128,7 @@ function validExpense(x: unknown): Expense | null {
   if (e.tax !== undefined) { if (!isTaxTag(e.tax)) return null; out.tax = e.tax; }
   if (e.accountId !== undefined) { if (typeof e.accountId !== "string" || !ID.test(e.accountId)) return null; out.accountId = e.accountId; }
   if (e.photo !== undefined) { if (e.photo !== true) return null; out.photo = true; }
+  if (e.planId !== undefined) { if (typeof e.planId !== "string" || !ID.test(e.planId)) return null; out.planId = e.planId; }
   return out;
 }
 
@@ -166,8 +190,8 @@ export function readBackup(text: string): { ok: true; value: Backup } | { ok: fa
     for (const x of b.debts) { const d = validDebt(x); if (!d) return bad; debts.push(d); }
   }
   const accounts = list(b.accounts, validAccount, 200), transfers = list(b.transfers, validTransfer), holdings = list(b.holdings, validHolding, 500);
-  const goals = list(b.goals, validGoal, 200), photos = list(b.photos, validPhoto, 20000);
-  if (!accounts || !transfers || !holdings || !goals || !photos) return bad;
+  const goals = list(b.goals, validGoal, 200), photos = list(b.photos, validPhoto, 20000), plan = list(b.plan, validPlan, 500);
+  if (!accounts || !transfers || !holdings || !goals || !photos || !plan) return bad;
   const s = (b.settings ?? {}) as Record<string, unknown>;
   const acct = (v: unknown) => (typeof v === "string" && accounts.some(a => a.id === v) ? v : null);
   const categoryLimits: CategoryLimits = {};
@@ -178,7 +202,7 @@ export function readBackup(text: string): { ok: true; value: Backup } | { ok: fa
   }
   const limit = s.monthlyLimitPaise;
   const monthlyLimitPaise = typeof limit === "number" && Number.isInteger(limit) && limit > 0 && limit <= MAX_PAISE ? limit : null;
-  return { ok: true, value: { kind: BACKUP_KIND, version: b.version, exportedAt: String(b.exportedAt ?? ""), expenses, learned, repeats, debts, accounts, transfers, holdings, goals, photos,
+  return { ok: true, value: { kind: BACKUP_KIND, version: b.version, exportedAt: String(b.exportedAt ?? ""), expenses, learned, repeats, debts, accounts, transfers, holdings, goals, plan, photos,
     settings: { monthlyLimitPaise, categoryLimits, seniorSelf: s.seniorSelf === true, seniorParents: s.seniorParents === true, upiAccount: acct(s.upiAccount), cashAccount: acct(s.cashAccount) } } };
 }
 

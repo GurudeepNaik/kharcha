@@ -15,8 +15,10 @@ import { Sheet, SheetHead, btnLine, btnPrimary, card } from "./ui";
 export type ListName = "accounts" | "transfers" | "holdings" | "goals";
 type Item = Account | Transfer | Holding | Goal;
 
-export function WealthView({ rows, now, accounts, transfers, holdings, goals, settings, onSave, onDelete, onSettings, say }: {
+export function WealthView({ rows, now, accounts, transfers, holdings, goals, settings, planLoans, onSave, onDelete, onSettings, say }: {
   rows: Expense[]; now: string; accounts: Account[]; transfers: Transfer[]; holdings: Holding[]; goals: Goal[]; settings: Settings;
+  /** Loans tracked in Payments: what's left on each, counted as owed. */
+  planLoans: { id: string; name: string; totalPaise: number }[];
   onSave: (list: ListName, item: Item) => Promise<void>;
   onDelete: (list: ListName, id: string) => Promise<void>;
   onSettings: (s: Partial<Settings>) => Promise<void>;
@@ -25,7 +27,9 @@ export function WealthView({ rows, now, accounts, transfers, holdings, goals, se
   const i = useI18n();
   const { t } = i;
   const w = t.wealth;
-  const nw = netWorth(accounts, rows, transfers, holdings);
+  const base = netWorth(accounts, rows, transfers, holdings);
+  const loansLeft = planLoans.reduce((s2, l) => s2 + l.totalPaise, 0);
+  const nw = { ...base, owed: base.owed + loansLeft, total: base.total - loansLeft };
   const [sheet, setSheet] = useState<null | { kind: "account"; item?: Account } | { kind: "move" } | { kind: "holding"; item?: Holding } | { kind: "goal"; item?: Goal } | { kind: "addMoney"; item: Goal }>(null);
   const at = () => new Date().toISOString();
   const close = () => setSheet(null);
@@ -95,6 +99,16 @@ export function WealthView({ rows, now, accounts, transfers, holdings, goals, se
           <button type="button" onClick={() => setSheet({ kind: "holding" })} className="press min-h-11 rounded-xl bg-accent px-4 text-[14px] font-semibold text-accent-fg" data-testid="add-holding">{w.add}</button>
         </div>
         <p className="mt-0.5 text-[13px] text-muted">{w.holdingsHelp}</p>
+        {planLoans.length > 0 && (
+          <ul className="mt-2 divide-y divide-line" data-testid="plan-loans">
+            {planLoans.map(l => (
+              <li key={l.id} className="flex min-h-12 items-center gap-3 py-2">
+                <span className="min-w-0 flex-1"><span className="block truncate font-medium">{l.name}</span><span className="block text-[13px] text-muted">{w.kinds.loan} · {t.pay.title}</span></span>
+                <span className="num shrink-0 font-semibold text-bad">−{rupees(Math.round(l.totalPaise / 100) * 100)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         {holdings.length > 0 && (
           <ul className="mt-2 divide-y divide-line" data-testid="holdings">
             {[...holdings].sort((a, b) => b.valuePaise - a.valuePaise).map(h => (

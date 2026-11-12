@@ -2,7 +2,7 @@
 import { kindOf, type Category } from "./categories";
 import { addDays, addMonths, monthOf } from "./dates";
 import { byCategory, inMonth, spends, sum } from "./totals";
-import type { Expense, Repeat } from "./types";
+import type { Expense } from "./types";
 
 export type Insight =
   | { kind: "catUp" | "catDown"; category: Category; now: number; then: number; pct: number }
@@ -13,7 +13,7 @@ export type Insight =
 
 const MIN_NOW = 500_00, MIN_THEN = 200_00, MIN_PCT = 30;
 
-export function insights(rows: Expense[], month: string, now: string, repeats: Repeat[], limit: number | null): Insight[] {
+export function insights(rows: Expense[], month: string, now: string, repeats: { category: Category; amountPaise: number }[], limit: number | null): Insight[] {
   const out: Insight[] = [];
   const isCurrent = monthOf(now) === month;
   const day = isCurrent ? Number(now.slice(8)) : 31;

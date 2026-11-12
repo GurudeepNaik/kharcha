@@ -9,7 +9,7 @@ import { monthText, useI18n } from "@/lib/i18n";
 import { rupees } from "@/lib/money";
 import { byCategory, incomes, inMonth, invests, spends, sum } from "@/lib/totals";
 import { dailySpend, monthTotals, vsLastMonth } from "@/lib/trends";
-import type { Expense, Repeat, Settings } from "@/lib/types";
+import type { Expense, Settings } from "@/lib/types";
 import { insights, type Insight } from "@/lib/insights";
 import { dateText } from "@/lib/i18n";
 import { BarChart } from "./BarChart";
@@ -19,7 +19,7 @@ import { Icon, SpendRow, Svg, card } from "./ui";
 import { YearView } from "./YearView";
 
 type Props = {
-  rows: Expense[]; now: string; settings: Settings; repeats: Repeat[]; onOpen: (e: Expense) => void; isRepeating: (e: Expense) => boolean;
+  rows: Expense[]; now: string; settings: Settings; repeats: { category: Category; amountPaise: number }[]; onOpen: (e: Expense) => void; isRepeating: (e: Expense) => boolean;
   onSettings: (s: Partial<Settings>) => Promise<void>;
 };
 

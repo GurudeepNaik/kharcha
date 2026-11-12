@@ -6,19 +6,19 @@ import { APP_NAME } from "@/lib/brand";
 import { CATEGORIES, type SpendCategory } from "@/lib/categories";
 import { monthOf } from "@/lib/dates";
 import { dateText, dayText, monthText, useI18n } from "@/lib/i18n";
-import { upcoming } from "@/lib/repeat";
+import { dueSoon, monthTotals, type PlanItem } from "@/lib/plan";
 import { rupees } from "@/lib/money";
 import { EMPTY_FILTER, filterRows, isFiltering, type Filter } from "@/lib/search";
 import { byCategory, byDay, incomes, inMonth, invests, onDay, spends, sum } from "@/lib/totals";
-import type { Expense, Repeat, Settings } from "@/lib/types";
+import type { Expense, Settings } from "@/lib/types";
 import { LimitLine } from "./LimitLine";
 import { Icon, SpendRow, Svg, card } from "./ui";
 
 const PAGE = 60;
 const DAY_MS = 86_400_000;
 
-export function HomeView({ rows, now, settings, repeats, onSkip, onOpen, onMonth, onBackup, isRepeating }: {
-  rows: Expense[]; now: string; settings: Settings; repeats: Repeat[]; onSkip: (r: Repeat) => Promise<void>;
+export function HomeView({ rows, now, settings, plan, onSkip, onPayments, onOpen, onMonth, onBackup, isRepeating }: {
+  rows: Expense[]; now: string; settings: Settings; plan: PlanItem[]; onSkip: (it: PlanItem, month: string, skip: boolean) => Promise<void>; onPayments: () => void;
   onOpen: (e: Expense) => void; onMonth: () => void; onBackup: () => void; isRepeating: (e: Expense) => boolean;
 }) {
   const i = useI18n();
@@ -43,7 +43,8 @@ export function HomeView({ rows, now, settings, repeats, onSkip, onOpen, onMonth
     .map(c => ({ ...c, budget: settings.categoryLimits[c.category as SpendCategory] ?? 0 }))
     .filter(c => c.budget > 0 && c.paise >= c.budget * 0.85);
 
-  const soon = upcoming(repeats, now, 7);
+  const soon = dueSoon(plan, rows, now, 7);
+  const pt = monthTotals(plan, rows, monthOf(now), now);
   const filtering = searching && isFiltering(f);
   const list = filtering ? filterRows(rows, f) : rows;
   const days = byDay(list.slice(0, shown));
@@ -92,18 +93,26 @@ export function HomeView({ rows, now, settings, repeats, onSkip, onOpen, onMonth
         </ul>
       )}
 
+      {pt.count > 0 && (
+        <button type="button" onClick={onPayments} className={`press mt-3 block w-full ${card} p-4 text-left`} data-testid="home-payments">
+          <span className="flex items-baseline justify-between gap-2"><span className="font-semibold">{t.pay.home}</span><span className="text-[13px] font-semibold text-accent">{t.pay.open} ›</span></span>
+          <span className="num mt-0.5 block text-[14px] text-muted">{t.pay.homeText(pt.done, pt.count, pt.left)}</span>
+          <span className="mt-2 block h-2 overflow-hidden rounded-full bg-soft" aria-hidden><span className="bar block h-full rounded-full bg-accent" style={{ width: `${pt.toPay ? Math.max(Math.min(pt.paid / pt.toPay, 1) * 100, pt.paid ? 1.5 : 0) : 0}%` }} /></span>
+        </button>
+      )}
+
       {soon.length > 0 && (
         <section aria-labelledby="soon-title" className={`mt-3 ${card} p-4`} data-testid="upcoming">
           <h2 id="soon-title" className="font-semibold">{t.home.upcoming}</h2>
           <p className="text-[13px] text-muted">{t.home.upcomingHelp}</p>
           <ul className="mt-1 divide-y divide-line">
-            {soon.map(({ rule, date }) => (
-              <li key={rule.id} className="flex items-center gap-3 py-2">
+            {soon.map(({ it, date }) => (
+              <li key={it.id} className="flex items-center gap-3 py-2">
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{rule.note || t.cat[rule.category]} <span className="num">{rupees(rule.amountPaise)}</span></span>
-                  <span className="block text-[13px] text-muted">{dateText(date, i)}</span>
+                  <span className="block truncate font-medium">{it.name} {it.amountPaise ? <span className="num">{rupees(it.amountPaise)}</span> : null}</span>
+                  <span className="block text-[13px] text-muted">{dateText(date, i)}{it.autoPay ? ` · ${t.pay.auto}` : ""}</span>
                 </span>
-                <button type="button" onClick={() => void onSkip(rule)} className="press min-h-11 shrink-0 rounded-xl border border-line px-4 text-[14px] font-semibold">{t.home.skip}</button>
+                <button type="button" onClick={() => void onSkip(it, monthOf(date), true)} className="press min-h-11 shrink-0 rounded-xl border border-line px-4 text-[14px] font-semibold">{t.home.skip}</button>
               </li>
             ))}
           </ul>

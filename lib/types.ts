@@ -19,6 +19,8 @@ export interface Expense {
   accountId?: string;
   /** A photo of the receipt is kept for this entry (photos store, keyed by the entry id). */
   photo?: boolean;
+  /** The monthly payment (Payments tab) this entry pays. */
+  planId?: string;
 }
 
 /** "Every month": copies an entry onto the same day each month (the last day in shorter months). */

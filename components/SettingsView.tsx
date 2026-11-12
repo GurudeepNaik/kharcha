@@ -1,16 +1,15 @@
 "use client";
 
-// Language, monthly limit, budgets per category, monthly repeats, backup, restore and the spreadsheet export.
+// Language, monthly limit, budgets per category, statement import, backup, restore and the spreadsheet export.
 import { useEffect, useRef, useState } from "react";
 import { APP_NAME } from "@/lib/brand";
 import { MAX_BACKUP_BYTES, makeBackup, planRestore, readBackup, toCsv, type Backup } from "@/lib/backup";
-import { CATEGORIES, isIncomeCategory, type Category, type SpendCategory } from "@/lib/categories";
+import { CATEGORIES, type Category, type SpendCategory } from "@/lib/categories";
 import { today } from "@/lib/dates";
 import type { Debt } from "@/lib/debts";
 import { LANGS, dateText, useI18n } from "@/lib/i18n";
-import { readRupees, rupees } from "@/lib/money";
-import { nextDate } from "@/lib/repeat";
-import type { CategoryLimits, Expense, Repeat, Settings } from "@/lib/types";
+import { readRupees } from "@/lib/money";
+import type { CategoryLimits, Expense, Settings } from "@/lib/types";
 import { Sheet, SheetHead, btnLine, btnPrimary, card } from "./ui";
 import { ImportCard } from "./ImportCard";
 import type { ImportItem } from "@/lib/statement";
@@ -30,19 +29,16 @@ function download(name: string, blob: Blob) {
 
 const SPEND_CATS = CATEGORIES.filter(c => c.kind === "spend").map(c => c.key as SpendCategory);
 
-export function SettingsView({ rows, learned, repeats, debts, settings, persisted, now, extra, onImport, onSettings, onStopRepeat, onSkipRepeat, onRestore, say }: {
+export function SettingsView({ rows, learned, debts, settings, persisted, extra, onImport, onPayments, onSettings, onRestore, say }: {
   rows: Expense[];
   learned: Map<string, Category>;
-  repeats: Repeat[];
   debts: Debt[];
   extra: Required<Omit<BackupExtra, "photos">>;
   onImport: (items: ImportItem[], accountId: string | null) => Promise<void>;
   settings: Settings;
   persisted: boolean;
-  now: string;
   onSettings: (s: Partial<Settings>) => Promise<void>;
-  onStopRepeat: (r: Repeat) => Promise<void>;
-  onSkipRepeat: (r: Repeat) => Promise<void>;
+  onPayments: () => void;
   onRestore: (plan: Plan) => Promise<void>;
   say: (text: string) => void;
 }) {
@@ -91,7 +87,7 @@ export function SettingsView({ rows, learned, repeats, debts, settings, persiste
 
   async function backupFile() {
     const photos = withPhotos ? await Promise.all((await allPhotos()).map(async p => ({ id: p.id, type: p.blob.type || "image/jpeg", data: await blobToBase64(p.blob) }))) : [];
-    return new File([JSON.stringify(makeBackup(rows, learned, settings, repeats, debts, { ...extra, photos }))], `${base}-backup-${today()}.json`, { type: "application/json" });
+    return new File([JSON.stringify(makeBackup(rows, learned, settings, [], debts, { ...extra, photos }))], `${base}-backup-${today()}.json`, { type: "application/json" });
   }
   async function share() {
     try {
@@ -121,7 +117,7 @@ export function SettingsView({ rows, learned, repeats, debts, settings, persiste
   }
 
   const total = rows.length + debts.length;
-  const nothing = (p: Plan) => !p.add.length && !p.update.length && ![p.backup.debts, p.backup.repeats, p.backup.accounts, p.backup.transfers, p.backup.holdings, p.backup.goals, p.backup.photos].some(x => x.length);
+  const nothing = (p: Plan) => !p.add.length && !p.update.length && ![p.backup.debts, p.backup.repeats, p.backup.plan, p.backup.accounts, p.backup.transfers, p.backup.holdings, p.backup.goals, p.backup.photos].some(x => x.length);
 
   return (
     <section aria-labelledby="settings-title" className="space-y-4">
@@ -172,30 +168,9 @@ export function SettingsView({ rows, learned, repeats, debts, settings, persiste
         <button type="submit" className={`${btnPrimary} mt-3`} data-testid="budgets-save">{t.settings.budgetsSave}</button>
       </form>
 
-      <div className={`${card} p-4`}>
-        <h2 className="font-semibold">{t.settings.every}</h2>
-        {repeats.length === 0 ? (
-          <p className="mt-0.5 text-sm text-muted">{t.settings.everyEmpty}</p>
-        ) : (
-          <ul className="mt-2 divide-y divide-line" data-testid="repeats">
-            {[...repeats].sort((a, b) => a.day - b.day).map(r => {
-              const inc = isIncomeCategory(r.category);
-              const next = nextDate(r);
-              return (
-                <li key={r.id} className="flex items-center gap-3 py-2.5">
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{r.note || t.cat[r.category]} <span className={`num ${inc ? "text-accent" : ""}`}>{inc ? "+" : ""}{rupees(r.amountPaise)}</span></span>
-                    <span className="block text-[13px] text-muted">{t.settings.next(next <= now ? t.today : dateText(next, i))}</span>
-                  </span>
-                  <span className="flex shrink-0 flex-col gap-1.5 min-[400px]:flex-row">
-                    <button type="button" onClick={() => void onSkipRepeat(r)} className="press min-h-11 rounded-xl border border-line px-3 text-[14px] font-semibold" data-testid="skip-repeat">{t.settings.skip}</button>
-                    <button type="button" onClick={() => void onStopRepeat(r)} className="press min-h-11 rounded-xl border border-line px-3 text-[14px] font-semibold" data-testid="stop-repeat">{t.settings.stop}</button>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+      <div className={`${card} flex items-center gap-3 p-4`}>
+        <p className="min-w-0 flex-1 text-sm text-muted">{t.pay.empty}</p>
+        <button type="button" onClick={onPayments} className={`${btnLine} shrink-0`}>{t.pay.title}</button>
       </div>
 
       <ImportCard rows={rows} learned={learned} accounts={extra.accounts} onImport={onImport} />

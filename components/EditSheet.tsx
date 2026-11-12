@@ -15,10 +15,10 @@ import { Sheet, SheetHead } from "./ui";
 type SaveFn = (e: Expense, categoryChanged: boolean, everyMonth: boolean) => Promise<void>;
 type SkipFn = (e: Expense) => Promise<void>;
 
-export function EditSheet({ expense, repeating, now, onClose, onSave, onDelete, onSkip, accounts, onPhoto }: {
+export function EditSheet({ expense, planName, now, onClose, onSave, onDelete, onSkip, accounts, onPhoto }: {
   expense: Expense | null;
-  /** This entry's monthly repeat is still on. */
-  repeating: boolean;
+  /** The Payments item this entry pays, if any. */
+  planName: string | null;
   now: string;
   onClose: () => void;
   onSave: SaveFn;
@@ -30,13 +30,13 @@ export function EditSheet({ expense, repeating, now, onClose, onSave, onDelete, 
   const { t } = useI18n();
   return (
     <Sheet open={!!expense} onClose={onClose} label={t.edit.title}>
-      {expense && <Form key={expense.id} e={expense} repeating={repeating} now={now} onClose={onClose} onSave={onSave} onDelete={onDelete} onSkip={onSkip} accounts={accounts} onPhoto={onPhoto} />}
+      {expense && <Form key={expense.id} e={expense} planName={planName} now={now} onClose={onClose} onSave={onSave} onDelete={onDelete} onSkip={onSkip} accounts={accounts} onPhoto={onPhoto} />}
     </Sheet>
   );
 }
 
-function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip, accounts, onPhoto }: {
-  e: Expense; repeating: boolean; now: string; onClose: () => void;
+function Form({ e, planName, now, onClose, onSave, onDelete, onSkip, accounts, onPhoto }: {
+  e: Expense; planName: string | null; now: string; onClose: () => void;
   onSave: SaveFn;
   onDelete: (e: Expense) => Promise<void>;
   onSkip: SkipFn;
@@ -49,7 +49,7 @@ function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip, accounts, 
   const [category, setCategory] = useState<Category>(e.category);
   const [date, setDate] = useState(e.date);
   const [method, setMethod] = useState<Method | null>(e.method);
-  const [monthly, setMonthly] = useState(repeating);
+  const [monthly, setMonthly] = useState(false);
   const [tax, setTax] = useState<TaxTag | "">(e.tax ?? "");
   const [account, setAccount] = useState(e.accountId ?? "");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -130,6 +130,9 @@ function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip, accounts, 
         {TAX_TAGS.map(k => <option key={k} value={k}>{t.tax[k]}</option>)}
       </select>
 
+      {planName ? (
+        <p className="mt-4 rounded-xl bg-soft px-3 py-2.5 text-[14px]" data-testid="part-of">{t.pay.partOf(planName)}</p>
+      ) : (
       <label className="mt-4 flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-line px-3 has-checked:border-accent has-checked:bg-accent-soft">
         <input type="checkbox" checked={monthly} onChange={x => setMonthly(x.target.checked)} className="size-5 accent-[var(--accent)]" />
         <span className="text-[15px]">
@@ -137,6 +140,7 @@ function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip, accounts, 
           <span className="block text-[13px] text-muted">{t.edit.everyHint(Number(date.slice(8)) || "–")}</span>
         </span>
       </label>
+      )}
 
       {accounts.length > 0 && (
         <>
@@ -172,7 +176,7 @@ function Form({ e, repeating, now, onClose, onSave, onDelete, onSkip, accounts, 
         </div>
       )}
 
-      {repeating && (
+      {planName && (
         <button type="button" onClick={() => void onSkip(e)} data-testid="skip-this"
           className="press mt-4 min-h-12 w-full rounded-xl border border-line font-semibold">{t.edit.skipThis}</button>
       )}
