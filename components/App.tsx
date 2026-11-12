@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DriveError, connectDrive, saveToDrive } from "@/lib/drive";
+import { backupJson } from "@/lib/backupJson";
 import { disableNotify, enableNotify, notifyPermission, setRemindLang, showReminders } from "@/lib/notify";
 import { remindKey, remindersDue } from "@/lib/remind";
 import { monthInHand } from "@/lib/inhand";
@@ -177,6 +179,15 @@ export function App() {
     }))).catch(() => undefined);
   }, [loaded, settings.notify, plan, rows, now, lang]);
   useEffect(() => { if (settings.notify) void setRemindLang(lang).catch(() => undefined); }, [lang, settings.notify]);
+
+  async function driveBackup() {
+    try {
+      await connectDrive();
+      await saveToDrive(await backupJson(rows ?? [], learned, settings, debts, { accounts, transfers, holdings, goals, plan }, true));
+      await updateSettings({ lastBackupAt: new Date().toISOString(), driveOn: true });
+      say(t.drive.saved);
+    } catch (e) { const c = e instanceof DriveError ? e.code : "failed"; if (c !== "cancelled") say(t.drive[c]); }
+  }
 
   async function setNotify(on: boolean): Promise<NotificationPermission | "unsupported"> {
     if (!on) { await disableNotify(); await updateSettings({ notify: false }); say(t.remind.turnedOff); return notifyPermission(); }
@@ -433,7 +444,7 @@ export function App() {
                 </button>
               </div>
             )}
-            <HomeView rows={rows} debts={debts} accounts={accounts} transfers={transfers} onInHand={async v => { await updateSettings({ inHand: v }); say(t.hand.saved(v.paise)); }} now={now} settings={settings} plan={plan} onSkip={skipPlan} onPayments={() => go("payments")} onOpen={setEditing} onMonth={() => go("month")} onBackup={() => go("settings")} isRepeating={isRepeating} />
+            <HomeView rows={rows} debts={debts} onDriveBackup={driveBackup} accounts={accounts} transfers={transfers} onInHand={async v => { await updateSettings({ inHand: v }); say(t.hand.saved(v.paise)); }} now={now} settings={settings} plan={plan} onSkip={skipPlan} onPayments={() => go("payments")} onOpen={setEditing} onMonth={() => go("month")} onBackup={() => go("settings")} isRepeating={isRepeating} />
             <AddBox ref={addBox} now={now} learned={learned} typing={typing} accounts={accounts} settings={settings} onAdd={add} onDebt={addDebt} />
           </>
         )}

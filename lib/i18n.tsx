@@ -143,6 +143,13 @@ const en = {
     today: (n: string) => `${n} is due today`, tomorrow: (n: string) => `${n} is due tomorrow`, body: "Tap to mark it paid or skip it.",
     event: (n: string, amt: string) => `${n} due${amt ? ` · ${amt}` : ""}`,
   },
+  drive: {
+    backup: "Back up to Google Drive", restore: "Restore from Drive", working: "Working…",
+    help: "Saved in your Google Drive as kharcha-backup.json, receipt photos included. The app can see only this file, nothing else in your Drive.",
+    saved: "Backed up to Google Drive", nudge: "It's been a week. Back up to Google Drive?", nudgeBtn: "Back up",
+    offline: "Couldn't reach Google. Check your internet and try again.", denied: "Google Drive access wasn't allowed, so nothing was saved.",
+    failed: "Google Drive didn't take the backup. Try again in a minute.", none: "No backup found in this Google Drive yet.", cancelled: "Cancelled",
+  },
   hand: {
     title: "In hand", help: "Bank and cash together. Every entry updates it, and what's left carries into next month.",
     ask: "How much money do you have right now?", askHelp: "Add up your bank balance and cash. You only type this once.", label: "Money you have now (₹)", save: "Save",
@@ -364,6 +371,13 @@ const hi: Msg = {
     today: (n: string) => `${n} आज देना है`, tomorrow: (n: string) => `${n} कल देना है`, body: "भुगतान या स्किप करने के लिए टैप करें।",
     event: (n: string, amt: string) => `${n} देना है${amt ? ` · ${amt}` : ""}`,
   },
+  drive: {
+    backup: "Google Drive में बैकअप", restore: "Drive से वापस लाएँ", working: "हो रहा है…",
+    help: "आपके Google Drive में kharcha-backup.json नाम से सेव होता है, रसीद की फ़ोटो सहित। ऐप सिर्फ़ यही फ़ाइल देख सकता है, Drive में और कुछ नहीं।",
+    saved: "Google Drive में बैकअप हो गया", nudge: "एक हफ़्ता हो गया। Google Drive में बैकअप लें?", nudgeBtn: "बैकअप",
+    offline: "Google तक नहीं पहुँच पाए। इंटरनेट देखकर फिर कोशिश करें।", denied: "Google Drive की अनुमति नहीं मिली, इसलिए कुछ सेव नहीं हुआ।",
+    failed: "Google Drive ने बैकअप नहीं लिया। एक मिनट बाद फिर कोशिश करें।", none: "इस Google Drive में अभी कोई बैकअप नहीं है।", cancelled: "रद्द किया",
+  },
   hand: {
     title: "हाथ में", help: "बैंक और नकद मिलाकर। हर एंट्री से यह बदलता है, और बचा हुआ अगले महीने में जाता है।",
     ask: "अभी आपके पास कितने पैसे हैं?", askHelp: "बैंक बैलेंस और नकद जोड़ें। यह सिर्फ एक बार लिखना है।", label: "अभी के पैसे (₹)", save: "सेव करें",
@@ -582,6 +596,13 @@ const kn: Msg = {
     turnedOn: "ಜ್ಞಾಪನೆಗಳು ಆನ್", turnedOff: "ಜ್ಞಾಪನೆಗಳು ಆಫ್",
     today: (n: string) => `${n} ಇಂದು ಕಟ್ಟಬೇಕು`, tomorrow: (n: string) => `${n} ನಾಳೆ ಕಟ್ಟಬೇಕು`, body: "ಪಾವತಿ ಅಥವಾ ಸ್ಕಿಪ್ ಮಾಡಲು ಟ್ಯಾಪ್ ಮಾಡಿ.",
     event: (n: string, amt: string) => `${n} ಕಟ್ಟಬೇಕು${amt ? ` · ${amt}` : ""}`,
+  },
+  drive: {
+    backup: "Google Drive ಗೆ ಬ್ಯಾಕಪ್", restore: "Drive ನಿಂದ ಮರಳಿ ತನ್ನಿ", working: "ನಡೆಯುತ್ತಿದೆ…",
+    help: "ನಿಮ್ಮ Google Drive ನಲ್ಲಿ kharcha-backup.json ಆಗಿ ಉಳಿಸಲಾಗುತ್ತದೆ, ರಸೀದಿ ಫೋಟೋಗಳೊಂದಿಗೆ. ಆ್ಯಪ್ ಈ ಫೈಲ್ ಮಾತ್ರ ನೋಡಬಲ್ಲದು, Drive ನ ಬೇರೆ ಏನೂ ಅಲ್ಲ.",
+    saved: "Google Drive ಗೆ ಬ್ಯಾಕಪ್ ಆಯಿತು", nudge: "ಒಂದು ವಾರವಾಯಿತು. Google Drive ಗೆ ಬ್ಯಾಕಪ್ ಮಾಡುವುದೇ?", nudgeBtn: "ಬ್ಯಾಕಪ್",
+    offline: "Google ತಲುಪಲಾಗಲಿಲ್ಲ. ಇಂಟರ್ನೆಟ್ ನೋಡಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", denied: "Google Drive ಅನುಮತಿ ಸಿಗಲಿಲ್ಲ, ಹಾಗಾಗಿ ಏನೂ ಉಳಿಸಲಿಲ್ಲ.",
+    failed: "Google Drive ಬ್ಯಾಕಪ್ ಸ್ವೀಕರಿಸಲಿಲ್ಲ. ಒಂದು ನಿಮಿಷದ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", none: "ಈ Google Drive ನಲ್ಲಿ ಇನ್ನೂ ಬ್ಯಾಕಪ್ ಇಲ್ಲ.", cancelled: "ರದ್ದು",
   },
   hand: {
     title: "ಕೈಯಲ್ಲಿ", help: "ಬ್ಯಾಂಕ್ ಮತ್ತು ನಗದು ಸೇರಿ. ಪ್ರತಿ ನಮೂದು ಇದನ್ನು ಬದಲಾಯಿಸುತ್ತದೆ, ಉಳಿದದ್ದು ಮುಂದಿನ ತಿಂಗಳಿಗೆ ಹೋಗುತ್ತದೆ.",

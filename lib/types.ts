@@ -44,5 +44,7 @@ export interface Settings {
   inHand: InHand | null;
   /** Phone notifications before payments are due (this phone only; not in backups). */
   notify: boolean;
+  /** Backed up to Google Drive from this phone before (shows the weekly one-tap nudge). */
+  driveOn: boolean;
 }
-export const DEFAULT_SETTINGS: Settings = { monthlyLimitPaise: null, lastBackupAt: null, categoryLimits: {}, seniorSelf: false, seniorParents: false, upiAccount: null, cashAccount: null, inHand: null, notify: false };
+export const DEFAULT_SETTINGS: Settings = { monthlyLimitPaise: null, lastBackupAt: null, categoryLimits: {}, seniorSelf: false, seniorParents: false, upiAccount: null, cashAccount: null, inHand: null, notify: false, driveOn: false };

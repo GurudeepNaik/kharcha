@@ -14,8 +14,8 @@ import { Sheet, SheetHead, btnLine, btnPrimary, card } from "./ui";
 import { ImportCard } from "./ImportCard";
 import type { ImportItem } from "@/lib/statement";
 import type { BackupExtra } from "@/lib/backup";
-import { allPhotos } from "@/lib/store";
-import { blobToBase64 } from "@/lib/image";
+import { backupJson } from "@/lib/backupJson";
+import { DriveError, connectDrive, driveEnabled, loadFromDrive, prepareDrive, saveToDrive } from "@/lib/drive";
 
 export type Plan = { backup: Backup; add: Expense[]; update: Expense[]; unchanged: number };
 
@@ -86,8 +86,29 @@ export function SettingsView({ rows, learned, debts, settings, persisted, extra,
   }
 
   async function backupFile() {
-    const photos = withPhotos ? await Promise.all((await allPhotos()).map(async p => ({ id: p.id, type: p.blob.type || "image/jpeg", data: await blobToBase64(p.blob) }))) : [];
-    return new File([JSON.stringify(makeBackup(rows, learned, settings, [], debts, { ...extra, photos }))], `${base}-backup-${today()}.json`, { type: "application/json" });
+    return new File([await backupJson(rows, learned, settings, debts, extra, withPhotos)], `${base}-backup-${today()}.json`, { type: "application/json" });
+  }
+  useEffect(() => { if (driveEnabled()) void prepareDrive().catch(() => undefined); }, []);
+  const [driveBusy, setDriveBusy] = useState(false);
+  const driveFail = (e: unknown) => { const c = e instanceof DriveError ? e.code : "failed"; if (c !== "cancelled") say(t.drive[c]); };
+  async function toDrive() {
+    setDriveBusy(true);
+    try {
+      await connectDrive();
+      await saveToDrive(await backupJson(rows, learned, settings, debts, extra, true));
+      await onSettings({ lastBackupAt: new Date().toISOString(), driveOn: true });
+      say(t.drive.saved);
+    } catch (e) { driveFail(e); } finally { setDriveBusy(false); }
+  }
+  async function fromDrive() {
+    setDriveBusy(true); setFileError(null);
+    try {
+      await connectDrive();
+      const { text } = await loadFromDrive();
+      const r = readBackup(text);
+      if (!r.ok) { setFileError(/newer/.test(r.error) ? t.settings.newer : t.settings.badFile); return; }
+      setPlan({ backup: r.value, ...planRestore(rows, r.value.expenses) });
+    } catch (e) { driveFail(e); } finally { setDriveBusy(false); }
   }
   async function share() {
     try {
@@ -180,6 +201,15 @@ export function SettingsView({ rows, learned, debts, settings, persisted, extra,
         <p className="mt-0.5 text-sm text-muted">
           {t.settings.backupHelp}{settings.lastBackupAt ? t.settings.lastBackup(dateText(settings.lastBackupAt.slice(0, 10), i)) : t.settings.noBackup}
         </p>
+        {driveEnabled() && (
+          <div className="mt-3 rounded-xl bg-soft/60 p-3" data-testid="drive">
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => void toDrive()} disabled={!total || driveBusy} className={btnPrimary} data-testid="drive-backup">{driveBusy ? t.drive.working : t.drive.backup}</button>
+              <button type="button" onClick={() => void fromDrive()} disabled={driveBusy} className={btnLine} data-testid="drive-restore">{t.drive.restore}</button>
+            </div>
+            <p className="mt-2 text-[13px] text-muted">{t.drive.help}</p>
+          </div>
+        )}
         <div className="mt-3 flex flex-wrap gap-2">
           {canShare && <button type="button" onClick={() => void share()} disabled={!total} className={btnPrimary}>{t.settings.share}</button>}
           <button type="button" onClick={() => void saveFile()} disabled={!total} className={btnLine} data-testid="save-backup">{t.settings.saveFile}</button>

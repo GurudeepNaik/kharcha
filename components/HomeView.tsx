@@ -1,7 +1,8 @@
 "use client";
 
 // Home: today and this month at a glance, budget warnings, and recent entries (with search and filters).
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { driveEnabled, prepareDrive } from "@/lib/drive";
 import { APP_NAME } from "@/lib/brand";
 import { CATEGORIES, type SpendCategory } from "@/lib/categories";
 import { monthOf } from "@/lib/dates";
@@ -21,8 +22,8 @@ import { Icon, SpendRow, Svg, card } from "./ui";
 const PAGE = 60;
 const DAY_MS = 86_400_000;
 
-export function HomeView({ rows, debts, accounts, transfers, onInHand, now, settings, plan, onSkip, onPayments, onOpen, onMonth, onBackup, isRepeating }: {
-  rows: Expense[]; debts: Debt[]; accounts: Account[]; transfers: Transfer[]; onInHand: (v: InHand) => Promise<void>;
+export function HomeView({ rows, debts, accounts, transfers, onInHand, onDriveBackup, now, settings, plan, onSkip, onPayments, onOpen, onMonth, onBackup, isRepeating }: {
+  rows: Expense[]; debts: Debt[]; accounts: Account[]; transfers: Transfer[]; onInHand: (v: InHand) => Promise<void>; onDriveBackup: () => Promise<void>;
   now: string; settings: Settings; plan: PlanItem[]; onSkip: (it: PlanItem, month: string, skip: boolean) => Promise<void>; onPayments: () => void;
   onOpen: (e: Expense) => void; onMonth: () => void; onBackup: () => void; isRepeating: (e: Expense) => boolean;
 }) {
@@ -41,7 +42,11 @@ export function HomeView({ rows, debts, accounts, transfers, onInHand, now, sett
   const left = monthIn - monthSpent - monthInvest;
   const oldest = rows.length ? Date.parse(rows.reduce((a, e) => (e.createdAt < a ? e.createdAt : a), rows[0]!.createdAt)) : Date.now();
   const since = settings.lastBackupAt ? Date.parse(settings.lastBackupAt) : oldest;
-  const needBackup = rows.length >= 20 && Date.now() - since >= 30 * DAY_MS;
+  // Drive used before on this phone: a one-tap nudge each week. Otherwise the monthly reminder to save a file.
+  const driveNudge = driveEnabled() && settings.driveOn && rows.length > 0 && Date.now() - since >= 7 * DAY_MS;
+  const needBackup = !driveNudge && rows.length >= 20 && Date.now() - since >= 30 * DAY_MS;
+  const [driveBusy, setDriveBusy] = useState(false);
+  useEffect(() => { if (driveNudge) void prepareDrive().catch(() => undefined); }, [driveNudge]);
 
   // Categories at 85% or more of their budget this month.
   const warnings = byCategory(spends(monthRows))
@@ -125,6 +130,13 @@ export function HomeView({ rows, debts, accounts, transfers, onInHand, now, sett
         </section>
       )}
 
+      {driveNudge && (
+        <div className="mt-3 flex items-center gap-3 rounded-2xl bg-warn-soft p-3 ps-4 text-[14px]" role="note" data-testid="drive-nudge">
+          <p className="flex-1">{t.drive.nudge}</p>
+          <button type="button" disabled={driveBusy} onClick={async () => { setDriveBusy(true); try { await onDriveBackup(); } finally { setDriveBusy(false); } }}
+            className="press min-h-11 shrink-0 rounded-xl bg-card px-3 font-semibold disabled:opacity-60">{driveBusy ? t.drive.working : t.drive.nudgeBtn}</button>
+        </div>
+      )}
       {needBackup && (
         <div className="mt-3 flex items-center gap-3 rounded-2xl bg-warn-soft p-3 ps-4 text-[14px]" role="note">
           <p className="flex-1">{t.home.backupNudge}</p>
