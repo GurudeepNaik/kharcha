@@ -12,6 +12,7 @@ import {
 import { newId } from "@/lib/store";
 import type { Expense } from "@/lib/types";
 import type { Account } from "@/lib/wealth";
+import { RemindCard } from "./RemindCard";
 import { Icon, Sheet, SheetHead, Svg, btnLine, btnPrimary, card } from "./ui";
 
 /** Interest makes paise; loan figures and totals read better in whole rupees. */
@@ -24,6 +25,7 @@ type Props = {
   onRemovePayment: (e: Expense) => Promise<void>;
   onSaveItem: (it: PlanItem) => Promise<void>;
   onDeleteItem: (it: PlanItem) => Promise<void>;
+  notify: boolean; onNotify: (on: boolean) => Promise<NotificationPermission | "unsupported">; say: (s: string) => void;
 };
 const GROUPS: PlanKind[] = ["income", "loan", "invest", "insurance", "bill"];
 const groupOf = (k: PlanKind): PlanKind => (k === "goldloan" ? "loan" : k);
@@ -131,6 +133,7 @@ export function PaymentsView(p: Props) {
             );
           })}
           <button type="button" onClick={() => setForm({})} className={`${btnLine} w-full`} data-testid="plan-add">+ {P.add}</button>
+          {month === current && <RemindCard items={p.items} now={p.now} notify={p.notify} onNotify={p.onNotify} say={p.say} />}
         </>
       )}
 

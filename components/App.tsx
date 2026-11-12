@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { disableNotify, enableNotify, notifyPermission, setRemindLang, showReminders } from "@/lib/notify";
+import { remindKey, remindersDue } from "@/lib/remind";
 import { monthInHand } from "@/lib/inhand";
 import { APP_NAME } from "@/lib/brand";
 import { isIncomeCategory, isSpendCategory, keyWord, kindOf, type Category } from "@/lib/categories";
@@ -22,7 +24,7 @@ import {
 } from "@/lib/store";
 import { inMonth, sortRows, sum } from "@/lib/totals";
 import { DEFAULT_SETTINGS, type Expense, type Settings } from "@/lib/types";
-import { AddBox, type AddBoxHandle, type DebtInput } from "./AddBox";
+import { AddBox, type AddBoxHandle, type DebtInput, type SplitInput } from "./AddBox";
 import { EditSheet } from "./EditSheet";
 import { HomeView } from "./HomeView";
 import { InstallButton } from "./InstallButton";
@@ -164,6 +166,24 @@ export function App() {
     if (added.length) say(MESSAGES[lang].pay.tAuto(added.length));
   }, [say, lang]);
   useEffect(() => { if (loaded) void runDue(plan, now); }, [loaded, now, plan, runDue]);
+  // Reminders: due today or tomorrow, shown once each, when the app is open (the service worker covers closed, where it can).
+  useEffect(() => {
+    if (!loaded || !settings.notify) return;
+    const R = MESSAGES[lang].remind;
+    void showReminders(remindersDue(plan, rows ?? [], now).map(x => ({
+      key: remindKey(x.item.id, x.date),
+      title: `${(x.when === "today" ? R.today : R.tomorrow)(x.item.name)}${x.item.amountPaise ? ` · ${rupees(x.item.amountPaise)}` : ""}`,
+      body: R.body,
+    }))).catch(() => undefined);
+  }, [loaded, settings.notify, plan, rows, now, lang]);
+  useEffect(() => { if (settings.notify) void setRemindLang(lang).catch(() => undefined); }, [lang, settings.notify]);
+
+  async function setNotify(on: boolean): Promise<NotificationPermission | "unsupported"> {
+    if (!on) { await disableNotify(); await updateSettings({ notify: false }); say(t.remind.turnedOff); return notifyPermission(); }
+    const p = await enableNotify(lang);
+    if (p === "granted") { await updateSettings({ notify: true }); say(t.remind.turnedOn); }
+    return p;
+  }
 
   function go(to: Tab) {
     if (to === tab) { scrollTo({ top: 0, behavior: "smooth" }); return; }
@@ -204,7 +224,7 @@ export function App() {
     return spent > budget ? ` ${t.toast.overBudget(t.cat[e.category], spent - budget)}` : "";
   }
 
-  async function add(p: Parsed, picked: boolean, everyMonth: boolean, accountId?: string | null) {
+  async function add(p: Parsed, picked: boolean, everyMonth: boolean, accountId?: string | null, split?: SplitInput) {
     const at = new Date().toISOString();
     let e: Expense = { id: newId(), ...p, createdAt: at, updatedAt: at };
     // Account: the one picked, else the default for UPI or cash payments.
@@ -217,6 +237,10 @@ export function App() {
     if (!everyMonth) { matched = matchItem(e, plan, rows ?? []); if (matched) e.planId = matched.id; }
     await putExpense(e);
     if (everyMonth) e = await startPlan(e);
+    // Split bill: each person owes you their share, saved under People.
+    const owed: Debt[] = (split?.people ?? []).map(person => ({ id: newId(), person, dir: "gave" as Direction, amountPaise: split!.eachPaise, note: `${e.note} · split`, date: e.date, createdAt: at, updatedAt: at }));
+    for (const d of owed) await putDebt(d);
+    if (owed.length) setDebts(ds => [...ds, ...owed]);
     const next = sortRows([e, ...(rows ?? []).filter(x => x.id !== e.id)]);
     setRows(r => sortRows([e, ...(r ?? []).filter(x => x.id !== e.id)]));
     if (picked) await remember(e.note, e.category);
@@ -224,6 +248,15 @@ export function App() {
     closeReceipt();
     const inc = isIncomeCategory(e.category);
     const extra = `${e.date !== now ? ` · ${dayText(e.date, now, i18n)}` : ""}${everyMonth ? t.toast.monthly : ""}`;
+    if (split) {
+      const ps = split.people, nm = ps.length > 1 ? `${ps.slice(0, -1).join(", ")} ${t.split.and} ${ps[ps.length - 1]}` : ps[0] ?? "";
+      say(t.split.saved(e.amountPaise, ps.length ? t.split.owe(nm, ps.length === 1, split.eachPaise) : t.split.others), async () => {
+        await remove(e, true);
+        for (const d of owed) await deleteDebt(d.id);
+        setDebts(ds => ds.filter(x => !owed.some(o => o.id === x.id)));
+      });
+      return;
+    }
     say(t.toast.saved(`${inc ? "+" : ""}${rupees(e.amountPaise)}`, t.cat[e.category], extra) + (matched ? t.pay.tMatched(matched.name) : "") + budgetNote(next, e), everyMonth ? undefined : () => void remove(e, true));
   }
 
@@ -405,7 +438,8 @@ export function App() {
           </>
         )}
         {tab === "payments" && <PaymentsView items={plan} rows={rows} now={now} accounts={accounts} onPay={payPlan} onSkip={skipPlan}
-          onRemovePayment={e => remove(e)} onSaveItem={savePlan} onDeleteItem={deletePlan} />}
+          onRemovePayment={e => remove(e)} onSaveItem={savePlan} onDeleteItem={deletePlan}
+          notify={settings.notify} onNotify={setNotify} say={x => say(x)} />}
         {tab === "month" && <MonthView rows={rows} now={now} settings={settings} repeats={plan.filter(x => x.every === 1 && x.amountPaise && x.kind !== "income").map(x => ({ category: x.category, amountPaise: x.amountPaise! }))} onOpen={setEditing} isRepeating={isRepeating} onSettings={updateSettings}
           handFor={m => (settings.inHand ? monthInHand(settings.inHand, rows, debts, accounts, transfers, m, now) : null)} />}
         {tab === "wealth" && (

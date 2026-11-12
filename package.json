@@ -12,7 +12,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx tests/parse.test.mts && tsx tests/data.test.mts && tsx tests/features.test.mts && tsx tests/wealth.test.mts && tsx tests/plan.test.mts && tsx tests/inhand.test.mts",
+    "test": "tsx tests/parse.test.mts && tsx tests/data.test.mts && tsx tests/features.test.mts && tsx tests/wealth.test.mts && tsx tests/plan.test.mts && tsx tests/inhand.test.mts && tsx tests/split.test.mts && tsx tests/remind.test.mts",
     "smoke": "tsx tests/smoke.mts",
     "receipts": "tsx tests/receipt.mts"
   },

@@ -42,5 +42,7 @@ export interface Settings {
   upiAccount: string | null; cashAccount: string | null;
   /** Money in hand when you last typed it; see lib/inhand.ts. */
   inHand: InHand | null;
+  /** Phone notifications before payments are due (this phone only; not in backups). */
+  notify: boolean;
 }
-export const DEFAULT_SETTINGS: Settings = { monthlyLimitPaise: null, lastBackupAt: null, categoryLimits: {}, seniorSelf: false, seniorParents: false, upiAccount: null, cashAccount: null, inHand: null };
+export const DEFAULT_SETTINGS: Settings = { monthlyLimitPaise: null, lastBackupAt: null, categoryLimits: {}, seniorSelf: false, seniorParents: false, upiAccount: null, cashAccount: null, inHand: null, notify: false };

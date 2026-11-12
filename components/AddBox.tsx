@@ -7,10 +7,13 @@ import { parseDebt, type Direction } from "@/lib/debts";
 import { useI18n } from "@/lib/i18n";
 import { rupees } from "@/lib/money";
 import { parseEntry, type Method, type Parsed } from "@/lib/parse";
+import { kindOf } from "@/lib/categories";
+import { shares, splitWords } from "@/lib/split";
 import type { Settings } from "@/lib/types";
 import type { Account } from "@/lib/wealth";
 
 export interface DebtInput { person: string; dir: Direction; amountPaise: number; date: string }
+export interface SplitInput { people: string[]; ways: number; eachPaise: number; totalPaise: number }
 export interface AddBoxHandle { fill: (text: string) => void; focus: () => void }
 
 export const AddBox = forwardRef<AddBoxHandle, {
@@ -19,7 +22,7 @@ export const AddBox = forwardRef<AddBoxHandle, {
   typing: boolean;
   accounts: Account[];
   settings: Settings;
-  onAdd: (p: Parsed, pickedCategory: boolean, everyMonth: boolean, accountId?: string | null) => Promise<void>;
+  onAdd: (p: Parsed, pickedCategory: boolean, everyMonth: boolean, accountId?: string | null, split?: SplitInput) => Promise<void>;
   onDebt: (d: DebtInput) => Promise<void>;
 }>(function AddBox({ now, learned, typing, accounts, settings, onAdd, onDebt }, ref) {
   const { t } = useI18n();
@@ -38,12 +41,16 @@ export const AddBox = forwardRef<AddBoxHandle, {
     focus: () => input.current?.focus(),
   }), []);
 
-  const debt = useMemo(() => parseDebt(text, now), [text, now]);
-  const parsed = useMemo(() => parseEntry(text, now, learned), [text, now, learned]);
+  const sw = useMemo(() => splitWords(text), [text]);
+  const debt = useMemo(() => (sw ? null : parseDebt(text, now)), [sw, text, now]);
+  const parsed = useMemo(() => parseEntry(sw ? sw.rest : text, now, learned), [sw, text, now, learned]);
   const value: Parsed | null = !debt && parsed.ok
     ? { ...parsed.value, category: cat ?? parsed.value.category, date: date ?? parsed.value.date, method: method !== undefined ? method : parsed.value.method }
     : null;
   const income = value ? isIncomeCategory(value.category) : false;
+  // A bill split only applies to a spend (not money in or an investment).
+  const split = sw && value && kindOf(value.category) === "spend" ? { ...sw, ...shares(value.amountPaise, sw.ways) } : null;
+  const names = (ps: string[]) => (ps.length > 1 ? `${ps.slice(0, -1).join(", ")} ${t.split.and} ${ps[ps.length - 1]}` : ps[0] ?? "");
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -55,7 +62,9 @@ export const AddBox = forwardRef<AddBoxHandle, {
     }
     if (!value) { setTried(true); input.current?.focus(); return; }
     setSaving(true);
-    try { await onAdd(value, cat !== null && parsed.ok && cat !== parsed.value.category, monthly, account); reset(); } finally { setSaving(false); }
+    const picked = cat !== null && parsed.ok && cat !== parsed.value.category;
+    const sp = split ? { people: split.people, ways: split.ways, eachPaise: split.each, totalPaise: value.amountPaise } : undefined;
+    try { await onAdd(sp ? { ...value, amountPaise: split!.yours } : value, picked, monthly && !sp, account, sp); reset(); } finally { setSaving(false); }
   }
   function reset() { setText(""); setCat(null); setDate(null); setMethod(undefined); setMonthly(false); setAccount(undefined); setTried(false); input.current?.focus(); }
   const shownAccount = value ? (account !== undefined ? account : value.method === "upi" ? settings.upiAccount : value.method === "cash" ? settings.cashAccount : null) : null;
@@ -101,7 +110,7 @@ export const AddBox = forwardRef<AddBoxHandle, {
                   {m === "upi" ? t.upi : t.cash}
                 </button>
               ))}
-              <button type="button" aria-pressed={monthly} onClick={() => setMonthly(v => !v)} className={pill}>{t.everyMonth}</button>
+              {!split && <button type="button" aria-pressed={monthly} onClick={() => setMonthly(v => !v)} className={pill}>{t.everyMonth}</button>}
               {accounts.length > 0 && (
                 <label className="chip">
                   <span className="sr-only">{t.wealth.account}</span>
@@ -110,6 +119,11 @@ export const AddBox = forwardRef<AddBoxHandle, {
                     {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 </label>
+              )}
+              {split && (
+                <span className="num w-full text-[13px] text-muted" data-testid="split-preview">
+                  {t.split.ways(split.ways, split.yours)} · {split.people.length ? t.split.owe(names(split.people), split.people.length === 1, split.each) : t.split.others}
+                </span>
               )}
             </div>
           ) : error ? (

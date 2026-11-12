@@ -1,3 +1,6 @@
+import { mkdtemp, readdir, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 // Browser test of the real app: adding, editing, totals, month view, limit, backup → wipe → restore, CSV,
 // phone widths, Back button, offline and install.
 //   pnpm smoke                          # against production
@@ -689,6 +692,61 @@ ok("a damaged file is refused", (await text(fresh, "[role=alert]")).includes("da
   const mh = await text(p, "[data-testid=month-hand]");
   ok(`Month shows started with and in hand now (${mh})`, mh.includes("Started with₹10,000") && mh.includes("In hand now₹10,210"));
   ok("no sideways scroll", await noOverflow(p));
+  await p.close();
+}
+
+// ---------- Split a bill ----------
+{
+  const p = await phone();
+  const debtRows = () => p.evaluate(() => new Promise<{ person: string; amountPaise: number; dir: string; note: string }[]>((res, rej) => {
+    const r = indexedDB.open("expenses"); r.onerror = () => rej(r.error);
+    r.onsuccess = () => { const q = r.result.transaction("debts").objectStore("debts").getAll(); q.onsuccess = () => { res(q.result); r.result.close(); }; };
+  }));
+  await enter(p, "dinner 1200 split ravi asha");
+  ok("split preview: 3 ways, ₹400 each", (await text(p, "[data-testid=split-preview]")) === "Split 3 ways · your share ₹400 · Ravi and Asha owe you ₹400 each");
+  await p.keyboard.press("Enter");
+  await p.waitForFunction(() => (document.querySelector("#entry") as HTMLInputElement).value === "", { timeout: 3000 }); await wait(300);
+  const r1 = await dbRows(p), d1 = await debtRows(p);
+  ok("your ₹400 share saved as a food spend", r1.length === 1 && r1[0]!.amountPaise === 400_00 && r1[0]!.category === "food" && r1[0]!.note === "dinner");
+  ok("Ravi and Asha each owe ₹400 (People)", d1.length === 2 && d1.every(d => d.amountPaise === 400_00 && d.dir === "gave") && d1.map(d => d.person).sort().join() === "Asha,Ravi");
+  await add(p, "cab 600 split 3 ways"); await wait(300);
+  ok("split 3 ways with no names: only your ₹200", (await dbRows(p)).some(r => r.note === "cab" && r.amountPaise === 200_00) && (await debtRows(p)).length === 2);
+  await p.close();
+}
+
+// ---------- Reminders: calendar file and notifications ----------
+{
+  const p = await phone();
+  await p.browserContext().overridePermissions(BASE, ["notifications"]);
+  const d = today();
+  await p.evaluate((d: string) => new Promise<void>((res, rej) => {
+    const r = indexedDB.open("expenses"); r.onerror = () => rej(r.error);
+    r.onsuccess = () => {
+      const at = new Date().toISOString();
+      const tx = r.result.transaction("plan", "readwrite");
+      tx.objectStore("plan").put({ id: "rrrrrrrr-0000-4000-8000-000000000001", name: "Wi-Fi", kind: "bill", category: "bills", amountPaise: 79900, day: Number(d.slice(8)), every: 1,
+        startMonth: d.slice(0, 7), autoPay: false, handledThrough: null, skips: [], accountId: null, loan: null, createdAt: at, updatedAt: at });
+      tx.oncomplete = () => { r.result.close(); res(); };
+    };
+  }), d);
+  await p.reload({ waitUntil: "networkidle2" }); await p.waitForSelector("#entry");
+  await clickText(p, "Payments", "nav button"); await p.waitForSelector("[data-testid=remind]");
+  const dir = await mkdtemp(join(tmpdir(), "kharcha-ics-"));
+  await (await p.createCDPSession()).send("Page.setDownloadBehavior", { behavior: "allow", downloadPath: dir });
+  await tap(p, "[data-testid=remind-calendar]");
+  let ics = "";
+  for (let k = 0; k < 20 && !ics; k++) { await wait(200); const f = (await readdir(dir)).find(x => x.endsWith(".ics")); if (f) ics = await readFile(join(dir, f), "utf8"); }
+  ok(`calendar file has Wi-Fi monthly with an alert (${ics.length} chars${ics ? "" : ", no file"})`, ics.includes("SUMMARY:Wi-Fi due · ₹799") && ics.includes(`BYMONTHDAY=${Math.min(Number(d.slice(8)), 29) >= 29 ? -1 : Number(d.slice(8))}`) && ics.includes("BEGIN:VALARM"));
+  await tap(p, "[data-testid=remind-notify]");
+  await p.waitForFunction(() => document.querySelector("[data-testid=remind-notify]")?.getAttribute("aria-checked") === "true", { timeout: 4000 }).catch(() => undefined);
+  ok("notifications switch turns on", (await p.$eval("[data-testid=remind-notify]", b => b.getAttribute("aria-checked"))) === "true");
+  await wait(800);
+  const shown = await p.evaluate(async () => (await (await navigator.serviceWorker.ready).getNotifications()).map(n => n.title));
+  ok(`a notification for Wi-Fi due today (${shown.join(" | ")})`, shown.includes("Wi-Fi is due today · ₹799"));
+  await p.evaluate(async () => { for (const n of await (await navigator.serviceWorker.ready).getNotifications()) n.close(); });
+  await p.reload({ waitUntil: "networkidle2" }); await wait(1200);
+  const again = await p.evaluate(async () => (await (await navigator.serviceWorker.ready).getNotifications()).length);
+  ok("shown once, not again on reopening", shown.length > 0 && again === 0);
   await p.close();
 }
 

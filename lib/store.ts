@@ -69,7 +69,7 @@ export async function learn(word: string, category: Category) { await (await db(
 
 export async function getSettings(): Promise<Settings> {
   const d = await db();
-  const [limit, last, cats, ss, sp, ua, ca, ih] = await Promise.all(["monthlyLimitPaise", "lastBackupAt", "categoryLimits", "seniorSelf", "seniorParents", "upiAccount", "cashAccount", "inHand"].map(k => d.get("settings", k)));
+  const [limit, last, cats, ss, sp, ua, ca, ih, nt] = await Promise.all(["monthlyLimitPaise", "lastBackupAt", "categoryLimits", "seniorSelf", "seniorParents", "upiAccount", "cashAccount", "inHand", "notify"].map(k => d.get("settings", k)));
   return {
     monthlyLimitPaise: typeof limit === "number" ? limit : DEFAULT_SETTINGS.monthlyLimitPaise,
     lastBackupAt: typeof last === "string" ? last : DEFAULT_SETTINGS.lastBackupAt,
@@ -79,6 +79,7 @@ export async function getSettings(): Promise<Settings> {
     upiAccount: typeof ua === "string" ? ua : null,
     cashAccount: typeof ca === "string" ? ca : null,
     inHand: validInHand(ih),
+    notify: nt === true,
   };
 }
 export async function saveSettings(s: Partial<Settings>) {
