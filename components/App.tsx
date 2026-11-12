@@ -9,6 +9,8 @@ import { I18nContext, MESSAGES, dayText, initialLang, localeOf, storeLang, type 
 import { rupees } from "@/lib/money";
 import type { Parsed } from "@/lib/parse";
 import { dueRepeats, repeatFrom } from "@/lib/repeat";
+import { readImageText, takeInbox } from "@/lib/ocr";
+import { receiptToLine } from "@/lib/receipt";
 import { sharedToLine } from "@/lib/share";
 import {
   allDebts, allExpenses, allRepeats, applyDue, applyRestore, deleteDebt, deleteExpense, deleteRepeat, getSettings, keepData, learn, learnedMap, newId,
@@ -24,7 +26,7 @@ import { MonthView } from "./MonthView";
 import { PeopleView } from "./PeopleView";
 import { SettingsView } from "./SettingsView";
 import { ThemeToggle } from "./ThemeToggle";
-import { Icon, Svg, Toast, type ToastMsg } from "./ui";
+import { Icon, Svg, Toast, card, type ToastMsg } from "./ui";
 
 type Tab = "home" | "month" | "people" | "settings";
 const TABS: Tab[] = ["home", "month", "people", "settings"];
@@ -46,7 +48,8 @@ export function App() {
   const [typing, setTyping] = useState(false);
   const toastId = useRef(0);
   const addBox = useRef<AddBoxHandle>(null);
-  const pending = useRef<{ fill?: string; focus?: boolean } | null>(null);
+  const pending = useRef<{ fill?: string; focus?: boolean; inbox?: boolean; lost?: boolean } | null>(null);
+  const [receipt, setReceipt] = useState<{ url: string; status: "reading" | "done" | "failed" } | null>(null);
 
   const i18n: I18n = useMemo(() => ({
     lang, t: MESSAGES[lang], locale: localeOf(lang),
@@ -63,7 +66,9 @@ export function App() {
     setNow(today());
     // Opened from the share sheet (a payment shared from a UPI app) or the home-screen shortcut.
     const q = new URLSearchParams(location.search);
-    if (q.has("text") || q.has("title") || q.has("url")) {
+    if (q.get("shared") === "1") pending.current = { inbox: true };
+    else if (q.get("shared") === "0") pending.current = { lost: true };
+    else if (q.has("text") || q.has("title") || q.has("url")) {
       const line = sharedToLine(q.get("title") ?? "", q.get("text") ?? "", q.get("url") ?? "");
       if (line) pending.current = { fill: line };
     } else if (q.get("add") === "1") pending.current = { focus: true };
@@ -106,8 +111,26 @@ export function App() {
   useEffect(() => {
     if (!loaded || !pending.current) return;
     const p = pending.current; pending.current = null;
+    if (p.inbox) { void openInbox(); return; }
+    if (p.lost) { say(MESSAGES[initialLang()].receipt.lost); return; }
     setTimeout(() => { if (p.fill) addBox.current?.fill(p.fill); else if (p.focus) addBox.current?.focus(); }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
+
+  /** A payment shared from another app: text is read straight away; a receipt image is read on the phone. */
+  async function openInbox() {
+    const box = await takeInbox().catch(() => null);
+    if (!box) { say(MESSAGES[initialLang()].receipt.lost); return; }
+    const fromText = sharedToLine(box.title, box.text, box.url);
+    if (!box.file) { if (fromText) addBox.current?.fill(fromText); else addBox.current?.focus(); return; }
+    setReceipt({ url: URL.createObjectURL(box.file), status: "reading" });
+    let line: string | null = null;
+    try { line = receiptToLine(await readImageText(box.file)); } catch (err) { console.warn("receipt reader failed", err); line = null; }
+    line ??= fromText;
+    setReceipt(r => (r ? { ...r, status: line ? "done" : "failed" } : r));
+    if (line) addBox.current?.fill(line); else addBox.current?.focus();
+  }
+  function closeReceipt() { setReceipt(r => { if (r) URL.revokeObjectURL(r.url); return null; }); }
 
   /** Adds monthly entries that have come due (on open, and when the day changes). */
   const runDue = useCallback(async (rules: Repeat[], day: string) => {
@@ -162,6 +185,7 @@ export function App() {
     setRows(r => sortRows([e, ...(r ?? []).filter(x => x.id !== e.id)]));
     if (picked) await remember(e.note, e.category);
     if (!persisted) void keepData().then(setPersisted);
+    closeReceipt();
     const inc = isIncomeCategory(e.category);
     const extra = `${e.date !== now ? ` · ${dayText(e.date, now, i18n)}` : ""}${everyMonth ? t.toast.monthly : ""}`;
     say(t.toast.saved(`${inc ? "+" : ""}${rupees(e.amountPaise)}`, t.cat[e.category], extra) + budgetNote(next, e), everyMonth ? undefined : () => void remove(e, true));
@@ -239,6 +263,21 @@ export function App() {
       <>
         {tab === "home" && (
           <>
+            {receipt && (
+              <div className={`mb-3 flex gap-3 ${card} p-3`} data-testid="receipt">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={receipt.url} alt={t.receipt.alt} className="h-28 w-20 shrink-0 rounded-lg border border-line object-cover object-top" />
+                <div className="min-w-0 flex-1">
+                  <p className={`text-[15px] font-medium ${receipt.status === "failed" ? "text-bad" : ""}`} aria-live="polite" data-testid="receipt-status">
+                    {receipt.status === "reading" ? t.receipt.reading : receipt.status === "done" ? t.receipt.done : t.receipt.failed}
+                  </p>
+                  {receipt.status === "reading" && <p className="mt-1 text-[13px] text-muted">{t.receipt.first}</p>}
+                </div>
+                <button type="button" onClick={closeReceipt} aria-label={t.receipt.close} className="press grid size-11 shrink-0 place-items-center rounded-full bg-soft text-muted">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+                </button>
+              </div>
+            )}
             <HomeView rows={rows} now={now} settings={settings} onOpen={setEditing} onMonth={() => go("month")} onBackup={() => go("settings")} isRepeating={isRepeating} />
             <AddBox ref={addBox} now={now} learned={learned} typing={typing} onAdd={add} onDebt={addDebt} />
           </>

@@ -4,7 +4,8 @@ import type { NextConfig } from "next";
 // Dev mode needs eval for hot reload, so the policy only applies to production builds.
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  // wasm-unsafe-eval: the receipt reader runs as WebAssembly (compiled here, from this site's own files).
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self'",

@@ -105,3 +105,23 @@ assert.equal(B.readBackup(JSON.stringify({ kind: "expense-tracker-backup", versi
 const csv = B.toCsv([], [ds[0]!]);
 assert.ok(csv.includes("2026-11-01,Gave (lent or repaid),500,People,Ravi,"));
 console.log("BACKUP V3 OK");
+
+// ---------- Receipt images: text as the bundled reader actually returned it (sparse mode, 3 sizes) ----------
+{
+  const RC = (await import("../lib/receipt.ts")) as typeof import("../lib/receipt");
+  const read = (...lines: string[][]) => lines.map(l => l.join("\n"));
+  const CASES: [string, string[], string | null][] = [
+    ["paid to, ₹500", read(["Paid to", "Ravi Kumar", "ravikumar@okaxis", "500", "Completed", "12 Nov 2026, 10:42 am", "UPI transaction ID 431234567890"], ["Paid to", "Ravi Kumar", "500"], ["Paid to", "Ravi Kumar", "3500"]), "Ravi Kumar 500 upi"],
+    ["₹ read as 3 at one size, ¥ at others", read(["Paid to", "ASHA STORES", "31,250.50"], ["Paid to", "ASHA STORES", "¥ 1,250.50"], ["ASHA STORES", "¥1,250.50"]), "Asha Stores 1250.50 upi"],
+    ["money in, ₹ read as 3 at two sizes", read(["Received from", "Suresh M", "2,000", "Credited to your account"], ["Received from", "Suresh M", "32,000"], ["Suresh M", "32,000"]), "+2000 from Suresh M"],
+    ["dark receipt, 99 vs 399", read(["99", "Paid to Swiggy", "swiggy.stores@icici"], ["399", "Paid to Swiggy"], ["Paid to Swiggy"]), "Swiggy 99 upi"],
+    ["Rs. written out", read(["Rs. 75.00", "Sent to", "Raju"]), "Raju 75.00 upi"],
+    ["readings disagree (500 vs 600): no guess", read(["Paid to", "Ravi", "500"], ["Paid to", "Ravi", "600"]), null],
+    ["the ₹ misread can't explain a 2-digit gap", read(["500"], ["12500"]), null],
+    ["no amount", read(["Happy Diwali!", "From all of us"]), null],
+    ["masked account number isn't an amount", read(["Paid to", "ASHA STORES", "31,250.50", "Debited from", "XXXXXXXX1234"], ["ASHA STORES", "¥ 1,250.50", "XXXXXXXX1234"]), "Asha Stores 1250.50 upi"],
+    ["dates, times and IDs are not amounts", read(["12 Nov 2026, 10:42 am", "UPI transaction ID 431234567890"]), null],
+  ];
+  for (const [name, readings, want] of CASES) assert.equal(RC.receiptToLine(readings), want, `receipt: ${name}`);
+  console.log(`RECEIPTS OK (${CASES.length})`);
+}

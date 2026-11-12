@@ -83,6 +83,11 @@ const en = {
     day: "Day", monthCol: "Month", spentCol: "Spent", ofBudget: (x: number) => `of ${r(x)}`,
     tip: (label: string, x: number) => `${label}: ${r(x)}`,
   },
+  receipt: {
+    reading: "Reading the receipt…", first: "The first time takes longer: the receipt reader downloads once, then works offline.",
+    done: "Read from the receipt. Check the amount and name, then tap Save.", failed: "Couldn't read the amount. Type it in the box below.",
+    lost: "Couldn't get what was shared. Open the app once, then share again.", close: "Close receipt", alt: "The shared receipt",
+  },
   people: {
     title: "People", owedToYou: "Others owe you", youOwe: "You owe", empty: "No one yet",
     emptyHint: "Note money you lend or borrow, like lent ravi 500 in the Home box, or use the form below.",
@@ -183,6 +188,11 @@ const hi: Msg = {
     day: "दिन", monthCol: "महीना", spentCol: "खर्च", ofBudget: x => `${r(x)} में से`,
     tip: (label, x) => `${label}: ${r(x)}`,
   },
+  receipt: {
+    reading: "रसीद पढ़ी जा रही है…", first: "पहली बार थोड़ा समय लगेगा: रसीद पढ़ने वाला एक बार डाउनलोड होगा, फिर बिना इंटरनेट चलेगा।",
+    done: "रसीद से पढ़ा गया। रकम और नाम जाँचें, फिर सेव करें।", failed: "रकम पढ़ी नहीं जा सकी। नीचे के बॉक्स में लिखें।",
+    lost: "शेयर की गई चीज़ नहीं मिली। ऐप एक बार खोलें, फिर दोबारा शेयर करें।", close: "रसीद बंद करें", alt: "शेयर की गई रसीद",
+  },
   people: {
     title: "लोग", owedToYou: "आपको लेने हैं", youOwe: "आपको देने हैं", empty: "अभी कोई नहीं",
     emptyHint: "उधार दिया या लिया पैसा लिखें, जैसे होम बॉक्स में lent ravi 500, या नीचे का फ़ॉर्म भरें।",
@@ -280,6 +290,11 @@ const kn: Msg = {
     daily: "ಪ್ರತಿದಿನದ ಖರ್ಚು", six: "ಕಳೆದ 6 ತಿಂಗಳು", table: "ಕೋಷ್ಟಕವಾಗಿ ತೋರಿಸಿ", hideTable: "ಕೋಷ್ಟಕ ಮರೆಮಾಡಿ",
     day: "ದಿನ", monthCol: "ತಿಂಗಳು", spentCol: "ಖರ್ಚು", ofBudget: x => `${r(x)} ರಲ್ಲಿ`,
     tip: (label, x) => `${label}: ${r(x)}`,
+  },
+  receipt: {
+    reading: "ರಸೀದಿ ಓದಲಾಗುತ್ತಿದೆ…", first: "ಮೊದಲ ಬಾರಿ ಸ್ವಲ್ಪ ಸಮಯ ಬೇಕು: ರಸೀದಿ ಓದುವ ಸಾಧನ ಒಮ್ಮೆ ಡೌನ್‌ಲೋಡ್ ಆಗುತ್ತದೆ, ನಂತರ ಇಂಟರ್ನೆಟ್ ಇಲ್ಲದೆ ಕೆಲಸ ಮಾಡುತ್ತದೆ.",
+    done: "ರಸೀದಿಯಿಂದ ಓದಲಾಗಿದೆ. ಮೊತ್ತ ಮತ್ತು ಹೆಸರು ಪರಿಶೀಲಿಸಿ, ನಂತರ ಉಳಿಸಿ.", failed: "ಮೊತ್ತ ಓದಲಾಗಲಿಲ್ಲ. ಕೆಳಗಿನ ಬಾಕ್ಸ್‌ನಲ್ಲಿ ಬರೆಯಿರಿ.",
+    lost: "ಹಂಚಿದ್ದು ಸಿಗಲಿಲ್ಲ. ಆಪ್ ಒಮ್ಮೆ ತೆರೆಯಿರಿ, ನಂತರ ಮತ್ತೆ ಹಂಚಿ.", close: "ರಸೀದಿ ಮುಚ್ಚಿ", alt: "ಹಂಚಿದ ರಸೀದಿ",
   },
   people: {
     title: "ಜನರು", owedToYou: "ನಿಮಗೆ ಬರಬೇಕಾದದ್ದು", youOwe: "ನೀವು ಕೊಡಬೇಕಾದದ್ದು", empty: "ಇನ್ನೂ ಯಾರೂ ಇಲ್ಲ",
