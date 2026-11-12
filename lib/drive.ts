@@ -6,7 +6,10 @@ const GIS = "https://accounts.google.com/gsi/client";
 const API = "https://www.googleapis.com/drive/v3/files";
 const UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
 export const DRIVE_FILE = "kharcha-backup.json";
-export const DRIVE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
+// Public by design (every visitor's browser gets it). Shared with the portfolio Arcade: Google Cloud project portfolio-514108.
+// NEXT_PUBLIC_GOOGLE_CLIENT_ID overrides it; set it to an empty string to turn Drive off.
+const ARCADE_CLIENT_ID = "634635049870-2mefqemm0lms2h6ecvsim5vn097o7ikk.apps.googleusercontent.com";
+export const DRIVE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? ARCADE_CLIENT_ID;
 export const driveEnabled = () => !!DRIVE_CLIENT_ID;
 
 type TokenResponse = { access_token?: string; expires_in?: number; error?: string };

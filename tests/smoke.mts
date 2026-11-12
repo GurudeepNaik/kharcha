@@ -750,6 +750,24 @@ ok("a damaged file is refused", (await text(fresh, "[role=alert]")).includes("da
   await p.close();
 }
 
+// ---------- Google Drive backup: Google accepts this site (the sign-in itself needs a real account) ----------
+{
+  const p = await phone();
+  await add(p, "chai 20");
+  await clickText(p, "Settings", "nav button"); await p.waitForSelector("[data-testid=drive-backup]");
+  ok("Drive backup and restore buttons shown", !!(await p.$("[data-testid=drive-restore]")));
+  await wait(1500);
+  const popup = new Promise<Page | null>(res => { p.browserContext().once("targetcreated", async t => res(await t.page())); setTimeout(() => res(null), 10000); });
+  await tap(p, "[data-testid=drive-backup]");
+  const g = await popup;
+  let url = "";
+  if (g) { await g.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => undefined); url = g.url(); }
+  const err = /\/error|origin_mismatch|invalid_client|redirect_uri_mismatch/.test(url) || (g ? /origin_mismatch|invalid_client|Access blocked|doesn.t comply/i.test(await g.content().catch(() => "")) : true);
+  ok(`Google's sign-in opens with no setup error (${url.slice(0, 60)})`, !!g && url.includes("accounts.google.com") && !err);
+  await g?.close().catch(() => undefined);
+  await p.close();
+}
+
 // ---------- Phone widths, keyboard ----------
 for (const w of [320, 390]) {
   const p = await phone(w);
