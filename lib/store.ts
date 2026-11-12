@@ -1,0 +1,74 @@
+// Everything is saved in the browser's IndexedDB on this phone. Nothing is sent anywhere.
+import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import type { Category } from "./categories";
+import { sortRows } from "./totals";
+import { DEFAULT_SETTINGS, type Expense, type Settings } from "./types";
+
+interface Schema extends DBSchema {
+  expenses: { key: string; value: Expense; indexes: { date: string } };
+  learned: { key: string; value: { word: string; category: Category } };
+  settings: { key: string; value: unknown };
+}
+
+let dbp: Promise<IDBPDatabase<Schema>> | null = null;
+function db() {
+  // The database name stays neutral so the app can be renamed without losing anyone's data.
+  dbp ??= openDB<Schema>("expenses", 1, {
+    upgrade(d) {
+      d.createObjectStore("expenses", { keyPath: "id" }).createIndex("date", "date");
+      d.createObjectStore("learned", { keyPath: "word" });
+      d.createObjectStore("settings");
+    },
+  });
+  return dbp;
+}
+
+/** Asks the browser not to clear our data when the phone runs low on space. Safe to call often. */
+export async function keepData(): Promise<boolean> {
+  try {
+    if (!navigator.storage?.persist) return false;
+    return (await navigator.storage.persisted()) || (await navigator.storage.persist());
+  } catch { return false; }
+}
+
+export const newId = () => crypto.randomUUID();
+
+export async function allExpenses(): Promise<Expense[]> {
+  return sortRows(await (await db()).getAll("expenses"));
+}
+export async function putExpense(e: Expense) { await (await db()).put("expenses", e); }
+export async function deleteExpense(id: string) { await (await db()).delete("expenses", id); }
+
+export async function learnedMap(): Promise<Map<string, Category>> {
+  const rows = await (await db()).getAll("learned");
+  return new Map(rows.map(r => [r.word, r.category]));
+}
+export async function learn(word: string, category: Category) { await (await db()).put("learned", { word, category }); }
+
+export async function getSettings(): Promise<Settings> {
+  const d = await db();
+  const [limit, last] = await Promise.all([d.get("settings", "monthlyLimitPaise"), d.get("settings", "lastBackupAt")]);
+  return {
+    monthlyLimitPaise: typeof limit === "number" ? limit : DEFAULT_SETTINGS.monthlyLimitPaise,
+    lastBackupAt: typeof last === "string" ? last : DEFAULT_SETTINGS.lastBackupAt,
+  };
+}
+export async function saveSettings(s: Partial<Settings>) {
+  const tx = (await db()).transaction("settings", "readwrite");
+  for (const [k, v] of Object.entries(s)) await tx.store.put(v, k);
+  await tx.done;
+}
+
+/** Writes a restore in one transaction: either every row lands or none do. */
+export async function applyRestore(rows: Expense[], learned: { word: string; category: Category }[]) {
+  const tx = (await db()).transaction(["expenses", "learned"], "readwrite");
+  for (const r of rows) await tx.objectStore("expenses").put(r);
+  for (const l of learned) await tx.objectStore("learned").put(l);
+  await tx.done;
+}
+
+/** For tests only. */
+export async function _wipe() {
+  const d = await db();
+  await Promise.all([d.clear("expenses"), d.clear("learned"), d.clear("settings")]);
+}

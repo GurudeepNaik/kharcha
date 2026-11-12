@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --bg: #f6f7f5;
+  --card: #ffffff;
+  --soft: #eceee9;
+  --fg: #14181a;
+  --muted: #586064;
+  --line: #dfe2dc;
+  --accent: #0b7a4b;
+  --accent-soft: #e2f3ea;
+  --accent-fg: #ffffff;
+  --warn: #9a4a00;
+  --warn-soft: #fff1e0;
+  --bad: #b42318;
+  --bad-soft: #fdeceb;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #0c0f0e;
+  --card: #151a18;
+  --soft: #1c2320;
+  --fg: #e7ece9;
+  --muted: #9aa5a0;
+  --line: #29312d;
+  --accent: #5fd39a;
+  --accent-soft: #143224;
+  --accent-fg: #06140d;
+  --warn: #ffb766;
+  --warn-soft: #33220f;
+  --bad: #ff8a80;
+  --bad-soft: #3a1714;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0f0e; --card: #151a18; --soft: #1c2320; --fg: #e7ece9; --muted: #9aa5a0; --line: #29312d;
+    --accent: #5fd39a; --accent-soft: #143224; --accent-fg: #06140d; --warn: #ffb766; --warn-soft: #33220f;
+    --bad: #ff8a80; --bad-soft: #3a1714;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-soft: var(--soft);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-fg);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-jb), ui-monospace, SFMono-Regular, monospace;
+}
+
+html { -webkit-tap-highlight-color: transparent; }
+body { background: var(--bg); color: var(--fg); }
+::selection { background: var(--accent-soft); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+button, a, label, summary, [role="tab"], [role="radio"] { touch-action: manipulation; }
+button, [role="tab"], [role="radio"], summary { -webkit-user-select: none; user-select: none; }
+.num { font-variant-numeric: tabular-nums; }
+
+@layer components {
+.field {
+  width: 100%; min-height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--card);
+  padding: 0.7rem 0.9rem; font-size: 16px; /* 16px stops iOS zooming into the field */ color: var(--fg);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field::placeholder { color: color-mix(in oklab, var(--muted) 75%, transparent); }
+.field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.field[aria-invalid="true"] { border-color: var(--bad); }
+
+}
+
+.press { transition: transform 0.12s, background-color 0.15s, border-color 0.15s; }
+.press:active { transform: scale(0.97); }
+
+/* Bottom bar: slides away while the keyboard is up. */
+.tabbar { transition: transform 0.22s cubic-bezier(0.23, 1, 0.32, 1); }
+.tabbar[data-hidden="true"] { transform: translateY(110%); }
+
+/* Bottom sheet (native <dialog>, so focus stays inside and Esc / back closes it). */
+dialog.sheet {
+  margin: auto auto 0; width: 100%; max-width: 36rem; max-height: 92dvh; border: 0; padding: 0;
+  border-radius: 1.25rem 1.25rem 0 0; background: var(--card); color: var(--fg);
+}
+dialog.sheet::backdrop { background: rgb(0 0 0 / 0.45); }
+dialog.sheet[open] { animation: sheet-in 0.26s cubic-bezier(0.23, 1, 0.32, 1); }
+@keyframes sheet-in { from { transform: translateY(24px); opacity: 0.6; } to { transform: none; opacity: 1; } }
+@media (min-width: 640px) { dialog.sheet { margin: auto; border-radius: 1.25rem; } }
+
+.bar { transform-origin: left; animation: bar-in 0.4s cubic-bezier(0.23, 1, 0.32, 1); }
+@keyframes bar-in { from { transform: scaleX(0); } }
+
+.toast-in { animation: toast-in 0.2s cubic-bezier(0.23, 1, 0.32, 1); }
+@keyframes toast-in { from { transform: translateY(8px); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+@layer components {
+/* Preview chips under the add box: a native select / date input dressed as a pill. */
+.chip { position: relative; display: inline-flex; align-items: center; min-height: 2.25rem; border-radius: 999px; border: 1px solid var(--line); background: var(--soft); }
+.chip:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.chip-select { appearance: none; background: transparent; border: 0; color: var(--fg); font-size: 14px; font-weight: 500; padding: 0.35rem 0.85rem; min-height: 2.25rem; border-radius: 999px; }
+.chip-select:focus { outline: none; }
+select.chip-select { padding-inline-end: 1.6rem; background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position: calc(100% - 0.85rem) 55%, calc(100% - 0.55rem) 55%; background-size: 0.3rem 0.3rem; background-repeat: no-repeat; }
+}
