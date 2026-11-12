@@ -23,7 +23,7 @@ function download(name: string, blob: Blob) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-const SPEND_CATS = CATEGORIES.filter(c => !c.income).map(c => c.key as SpendCategory);
+const SPEND_CATS = CATEGORIES.filter(c => c.kind === "spend").map(c => c.key as SpendCategory);
 
 export function SettingsView({ rows, learned, repeats, debts, settings, persisted, now, onSettings, onStopRepeat, onRestore, say }: {
   rows: Expense[];

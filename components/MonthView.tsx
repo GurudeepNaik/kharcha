@@ -7,7 +7,7 @@ import { type Category, type SpendCategory } from "@/lib/categories";
 import { addMonths, monthOf } from "@/lib/dates";
 import { monthText, useI18n } from "@/lib/i18n";
 import { rupees } from "@/lib/money";
-import { byCategory, incomes, inMonth, spends, sum } from "@/lib/totals";
+import { byCategory, incomes, inMonth, invests, spends, sum } from "@/lib/totals";
 import { dailySpend, monthTotals, vsLastMonth } from "@/lib/trends";
 import type { Expense, Settings } from "@/lib/types";
 import { BarChart } from "./BarChart";
@@ -28,6 +28,12 @@ export function MonthView({ rows, now, settings, onOpen, isRepeating }: {
   const money = incomes(all);
   const total = sum(list);
   const moneyIn = sum(money);
+  const inv = invests(all);
+  const invested = sum(inv);
+  const left = moneyIn - total - invested;
+  // Investments and insurance by type: this month and everything so far.
+  const invAll = byCategory(invests(rows));
+  const invMonth = new Map(byCategory(inv).map(c => [c.category, c.paise]));
   const cats = byCategory(list);
   const vs = vsLastMonth(rows, month, now);
   const daily = dailySpend(rows, month, now);
@@ -58,13 +64,16 @@ export function MonthView({ rows, now, settings, onOpen, isRepeating }: {
         <p className="num mt-0.5 text-3xl font-bold" data-testid="month-total">{rupees(total)}</p>
         <p className="mt-0.5 text-sm text-muted">{t.month.count(list.length)}</p>
         {compare && <p className="num mt-2 text-sm" data-testid="vs-last">{compare}</p>}
-        {moneyIn > 0 && (
-          <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3" data-testid="month-in">
-            <div><dt className="text-sm text-muted">{t.month.moneyIn}</dt><dd className="num text-lg font-bold text-accent">+{rupees(moneyIn)}</dd></div>
-            <div>
-              <dt className="text-sm text-muted">{moneyIn >= total ? t.month.saved : t.month.overspent}</dt>
-              <dd className={`num text-lg font-bold ${moneyIn < total ? "text-bad" : ""}`}>{rupees(Math.abs(moneyIn - total))}</dd>
-            </div>
+        {(moneyIn > 0 || invested > 0) && (
+          <dl className="mt-3 space-y-1 border-t border-line pt-3" data-testid="month-in">
+            {moneyIn > 0 && <div className="flex justify-between gap-3"><dt className="text-sm text-muted">{t.month.moneyIn}</dt><dd className="num font-bold text-accent">+{rupees(moneyIn)}</dd></div>}
+            {invested > 0 && <div className="flex justify-between gap-3"><dt className="text-sm text-muted">{t.home.invested}</dt><dd className="num font-bold">{rupees(invested)}</dd></div>}
+            {moneyIn > 0 && (
+              <div className="flex justify-between gap-3">
+                <dt className="text-sm text-muted">{left >= 0 ? t.month.saved : t.month.overspent}</dt>
+                <dd className={`num font-bold ${left < 0 ? "text-bad" : ""}`} data-testid="month-left">{rupees(Math.abs(left))}</dd>
+              </div>
+            )}
           </dl>
         )}
         {isCurrent && settings.monthlyLimitPaise && <LimitLine spent={total} limit={settings.monthlyLimitPaise} month={month} now={now} />}
@@ -115,6 +124,25 @@ export function MonthView({ rows, now, settings, onOpen, isRepeating }: {
       {six.some(m => m.paise > 0) && (
         <BarChart testid="six-chart" title={t.month.six}
           bars={six.map(m => ({ key: m.month, label: monthText(m.month, i), short: monthText(m.month, i, true), paise: m.paise, current: m.month === month }))} />
+      )}
+
+      {invAll.length > 0 && (
+        <section aria-labelledby="inv-title" className={`${card} p-4`} data-testid="invest-summary">
+          <h2 id="inv-title" className="font-semibold">{t.home.invested}</h2>
+          <table className="num mt-2 w-full text-[14px]">
+            <thead><tr className="text-left text-[13px] text-muted"><th className="py-1 font-medium"><span className="sr-only">{t.add.category}</span></th><th className="py-1 text-right font-medium">{t.month.thisMonth}</th><th className="py-1 text-right font-medium">{t.month.allTime}</th></tr></thead>
+            <tbody className="divide-y divide-line">
+              {invAll.map(c => (
+                <tr key={c.category}><td className="py-1.5 pe-2">{t.cat[c.category]}</td><td className="py-1.5 text-right">{invMonth.get(c.category) ? rupees(invMonth.get(c.category)!) : "–"}</td><td className="py-1.5 text-right font-semibold">{rupees(c.paise)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          {inv.length > 0 && (
+            <ul className="-mx-4 mt-2 divide-y divide-line border-t border-line">
+              {inv.map(e => <SpendRow key={e.id} e={e} onOpen={onOpen} repeating={isRepeating(e)} />)}
+            </ul>
+          )}
+        </section>
       )}
 
       {money.length > 0 && (

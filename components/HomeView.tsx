@@ -8,7 +8,7 @@ import { monthOf } from "@/lib/dates";
 import { dayText, monthText, useI18n } from "@/lib/i18n";
 import { rupees } from "@/lib/money";
 import { EMPTY_FILTER, filterRows, isFiltering, type Filter } from "@/lib/search";
-import { byCategory, byDay, incomes, inMonth, onDay, spends, sum } from "@/lib/totals";
+import { byCategory, byDay, incomes, inMonth, invests, onDay, spends, sum } from "@/lib/totals";
 import type { Expense, Settings } from "@/lib/types";
 import { LimitLine } from "./LimitLine";
 import { Icon, SpendRow, Svg, card } from "./ui";
@@ -31,6 +31,8 @@ export function HomeView({ rows, now, settings, onOpen, onMonth, onBackup, isRep
   const todaySpent = sum(spends(onDay(rows, now)));
   const monthSpent = sum(spends(monthRows));
   const monthIn = sum(incomes(monthRows));
+  const monthInvest = sum(invests(monthRows));
+  const left = monthIn - monthSpent - monthInvest;
   const oldest = rows.length ? Date.parse(rows.reduce((a, e) => (e.createdAt < a ? e.createdAt : a), rows[0]!.createdAt)) : Date.now();
   const since = settings.lastBackupAt ? Date.parse(settings.lastBackupAt) : oldest;
   const needBackup = rows.length >= 20 && Date.now() - since >= 30 * DAY_MS;
@@ -60,17 +62,17 @@ export function HomeView({ rows, now, settings, onOpen, onMonth, onBackup, isRep
           <p className="num mt-0.5 text-2xl font-bold" data-testid="home-month-total">{rupees(monthSpent)}</p>
         </button>
       </div>
-      {monthIn > 0 && (
-        <div className={`mt-3 grid grid-cols-2 gap-3 ${card} p-4`} data-testid="money-in">
-          <div>
-            <p className="text-sm text-muted">{t.home.moneyIn}</p>
-            <p className="num mt-0.5 text-lg font-bold text-accent">+{rupees(monthIn)}</p>
-          </div>
-          <div>
-            <p className="text-sm text-muted">{monthIn - monthSpent >= 0 ? t.home.left : t.home.overspent}</p>
-            <p className={`num mt-0.5 text-lg font-bold ${monthIn - monthSpent < 0 ? "text-bad" : ""}`} data-testid="left">{rupees(Math.abs(monthIn - monthSpent))}</p>
-          </div>
-        </div>
+      {(monthIn > 0 || monthInvest > 0) && (
+        <dl className={`mt-3 space-y-1.5 ${card} p-4`} data-testid="money-in">
+          {monthIn > 0 && <div className="flex items-baseline justify-between gap-3"><dt className="text-sm text-muted">{t.home.moneyIn}</dt><dd className="num text-lg font-bold text-accent">+{rupees(monthIn)}</dd></div>}
+          {monthInvest > 0 && <div className="flex items-baseline justify-between gap-3"><dt className="text-sm text-muted">{t.home.invested}</dt><dd className="num text-lg font-bold" data-testid="invested">{rupees(monthInvest)}</dd></div>}
+          {monthIn > 0 && (
+            <div className="flex items-baseline justify-between gap-3 border-t border-line pt-1.5">
+              <dt className="text-sm text-muted">{left >= 0 ? t.home.left : t.home.overspent}</dt>
+              <dd className={`num text-lg font-bold ${left < 0 ? "text-bad" : ""}`} data-testid="left">{rupees(Math.abs(left))}</dd>
+            </div>
+          )}
+        </dl>
       )}
       {settings.monthlyLimitPaise && (
         <div className={`mt-3 ${card} px-4 pt-1 pb-3`}>
@@ -119,7 +121,7 @@ export function HomeView({ rows, now, settings, onOpen, onMonth, onBackup, isRep
                 <option value="">{t.search.anyPay}</option><option value="upi">{t.upi}</option><option value="cash">{t.cash}</option><option value="none">{t.notSet}</option>
               </select>
               <select aria-label={t.search.kindAll} value={f.kind} onChange={e => set({ kind: e.target.value as Filter["kind"] })} className={sel}>
-                <option value="">{t.search.kindAll}</option><option value="out">{t.search.kindOut}</option><option value="in">{t.search.kindIn}</option>
+                <option value="">{t.search.kindAll}</option><option value="out">{t.search.kindOut}</option><option value="in">{t.search.kindIn}</option><option value="invest">{t.search.kindInvest}</option>
               </select>
               <select aria-label={t.search.anyMonth} value={f.month} onChange={e => set({ month: e.target.value })} className={sel}>
                 <option value="">{t.search.anyMonth}</option>

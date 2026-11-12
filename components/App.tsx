@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { APP_NAME } from "@/lib/brand";
-import { isIncomeCategory, keyWord, type Category, type SpendCategory } from "@/lib/categories";
+import { isIncomeCategory, isSpendCategory, keyWord, type Category } from "@/lib/categories";
 import { monthOf, today } from "@/lib/dates";
 import type { Debt, Direction } from "@/lib/debts";
 import { I18nContext, MESSAGES, dayText, initialLang, localeOf, storeLang, type I18n, type Lang } from "@/lib/i18n";
@@ -169,8 +169,8 @@ export function App() {
 
   /** "Food is ₹200 over budget this month", after a save that crosses a category budget. */
   function budgetNote(all: Expense[], e: Expense): string {
-    if (isIncomeCategory(e.category)) return "";
-    const budget = settings.categoryLimits[e.category as SpendCategory];
+    if (!isSpendCategory(e.category)) return "";
+    const budget = settings.categoryLimits[e.category];
     if (!budget) return "";
     const spent = sum(inMonth(all, monthOf(e.date)).filter(x => x.category === e.category));
     return spent > budget ? ` ${t.toast.overBudget(t.cat[e.category], spent - budget)}` : "";

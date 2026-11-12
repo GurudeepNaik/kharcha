@@ -58,8 +58,9 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(
 const paise = (s: string) => Math.round(Number(s.replace(/[₹,]/g, "")) * 100);
 /** Rows as text with sorted keys and sorted by id, so two copies compare equal only if every field matches. */
 const canon = (rows: Row[]) => JSON.stringify([...rows].sort((a, b) => a.id.localeCompare(b.id)).map(r => Object.fromEntries(Object.entries(r).sort(([a], [b]) => a.localeCompare(b)))));
-const INCOME = new Set(["salary", "business", "refund", "income"]);
-const spent = (rows: Row[]) => rows.filter(r => !INCOME.has(r.category)).reduce((s, r) => s + r.amountPaise, 0);
+const INCOME = new Set(["salary", "business", "refund", "returns", "income"]);
+const INVEST = new Set(["sip", "stocks", "deposit", "gold", "retirement", "termIns", "healthIns", "otherIns", "invest"]);
+const spent = (rows: Row[]) => rows.filter(r => !INCOME.has(r.category) && !INVEST.has(r.category)).reduce((s, r) => s + r.amountPaise, 0);
 const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
 
 // ---------- Adding ----------
@@ -159,6 +160,21 @@ await enter(page, "+1500 from ravi");
 ok("+ means money in (preview shows +₹1,500)", (await text(page, "[data-testid=preview-amount]")) === "+₹1,500");
 await page.keyboard.press("Escape");
 
+// ---------- Invest & insure ----------
+{
+  await enter(page, "x"); await page.keyboard.press("Backspace");
+  const spentBefore = paise(await text(page, "[data-testid=today-total]"));
+  await add(page, "sip 5000");
+  await add(page, "health insurance 12,000");
+  rows = await dbRows(page);
+  ok("sip → SIP & mutual funds, health insurance → Health insurance", rows.some(r => r.note === "sip" && r.category === "sip") && rows.some(r => r.note === "health insurance" && r.category === "healthIns"));
+  ok("investments and insurance aren't counted as spent", paise(await text(page, "[data-testid=today-total]")) === spentBefore);
+  ok("Home shows Invested & insured ₹17,000", (await text(page, "[data-testid=invested]")) === "₹17,000");
+  const m = rows.filter(r => r.date.slice(0, 7) === t.slice(0, 7));
+  const inn = m.filter(r => INCOME.has(r.category)).reduce((s, r) => s + r.amountPaise, 0);
+  ok("Left = money in − spent − invested", paise(await text(page, "[data-testid=left]")) === Math.abs(inn - spent(m) - 1700000));
+}
+
 // ---------- Every month ----------
 {
   // Netflix from two months ago, set to repeat: the months since are added straight away.
@@ -204,6 +220,7 @@ const catSums = await page.$$eval("ul[aria-label='By category'] > li > button", 
 ok(`category rows add up to the month total (${catSums.length} categories)`, catSums.reduce((s, c) => s + paise(c), 0) === monthSum);
 await page.click("ul[aria-label='By category'] > li > button");
 ok(`Month shows money in +₹${(monthIn / 100).toLocaleString("en-IN")}`, (await text(page, "[data-testid=month-in]")).includes(`+₹${(monthIn / 100).toLocaleString("en-IN")}`));
+ok("Month lists investments by type (this month and all time)", (await text(page, "[data-testid=invest-summary]")).includes("Health insurance"));
 ok("tapping a category lists its spends", (await page.$$("ul[aria-label='By category'] > li ul button[data-id]")).length >= 1);
 await page.goBack();
 await wait(300);

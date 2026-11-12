@@ -73,11 +73,11 @@ function Form({ e, repeating, now, onClose, onSave, onDelete }: {
 
       <fieldset className="mt-3">
         <legend className="mb-1.5 text-sm font-medium">{t.edit.category}</legend>
-        {[false, true].map(inc => (
-        <div key={String(inc)} className={inc ? "mt-3" : ""}>
-        <p className="mb-1 text-[13px] text-muted">{inc ? t.add.in : t.add.spent}</p>
-        <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-4">
-          {CATEGORIES.filter(c => c.income === inc).map(c => (
+        {(["spend", "in", "invest"] as const).map(k => (
+        <div key={k} className={k !== "spend" ? "mt-3" : ""}>
+        <p className="mb-1 text-[13px] text-muted">{k === "spend" ? t.add.spent : k === "in" ? t.add.in : t.add.invest}</p>
+        <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3">
+          {CATEGORIES.filter(c => c.kind === k).map(c => (
             <label key={c.key} className="press flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-line px-2 text-center text-[14px] font-medium has-checked:border-accent has-checked:bg-accent-soft has-focus-visible:outline-2 has-focus-visible:outline-accent">
               <input type="radio" name="category" value={c.key} checked={category === c.key} onChange={() => setCategory(c.key)} className="sr-only" />
               {t.cat[c.key]}

@@ -82,8 +82,11 @@ export const AddBox = forwardRef<AddBoxHandle, {
               <label className="chip">
                 <span className="sr-only">{t.add.category}</span>
                 <select value={value.category} onChange={e => setCat(e.target.value as Category)} className="chip-select">
-                  <optgroup label={t.add.spent}>{CATEGORIES.filter(c => !c.income).map(c => <option key={c.key} value={c.key}>{t.cat[c.key]}</option>)}</optgroup>
-                  <optgroup label={t.add.in}>{CATEGORIES.filter(c => c.income).map(c => <option key={c.key} value={c.key}>{t.cat[c.key]}</option>)}</optgroup>
+                  {(["spend", "in", "invest"] as const).map(k => (
+                    <optgroup key={k} label={k === "spend" ? t.add.spent : k === "in" ? t.add.in : t.add.invest}>
+                      {CATEGORIES.filter(c => c.kind === k).map(c => <option key={c.key} value={c.key}>{t.cat[c.key]}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
               </label>
               {dateChip(value.date)}

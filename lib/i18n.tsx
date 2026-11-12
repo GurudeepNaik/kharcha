@@ -15,7 +15,8 @@ export const LANGS: { key: Lang; label: string; locale: string }[] = [
 export const localeOf = (l: Lang) => LANGS.find(x => x.key === l)!.locale;
 
 const en = {
-  cat: { food: "Food", groceries: "Groceries", travel: "Travel", bills: "Bills", shopping: "Shopping", health: "Health", rent: "Rent & EMI", other: "Other", salary: "Salary", business: "Business", refund: "Refund", income: "Other income" } satisfies Record<Category, string>,
+  cat: { food: "Food", groceries: "Groceries", travel: "Travel", bills: "Bills", shopping: "Shopping", health: "Health", rent: "Rent & EMI", other: "Other", salary: "Salary", business: "Business", refund: "Refund", returns: "Investment returns", income: "Other income",
+    sip: "SIP & mutual funds", stocks: "Stocks", deposit: "FD & RD", gold: "Gold", retirement: "PPF, NPS & EPF", termIns: "Term insurance", healthIns: "Health insurance", otherIns: "Other insurance", invest: "Other investment" } satisfies Record<Category, string>,
   upi: "UPI", cash: "Cash", notSet: "Not set",
   today: "Today", yesterday: "Yesterday",
   save: "Save", cancel: "Cancel", close: "Close", delete: "Delete", undo: "Undo", loading: "Loading…", everyMonth: "Every month",
@@ -25,7 +26,7 @@ const en = {
   theme: (to: "light" | "dark"): string => (to === "dark" ? "Switch to dark mode" : "Switch to light mode"),
   home: {
     h1: (app: string) => `${app}: today and this month`,
-    spentToday: "Spent today", spentMonth: "Spent this month", moneyIn: "Money in", left: "Left this month", overspent: "Spent more than came in",
+    spentToday: "Spent today", spentMonth: "Spent this month", moneyIn: "Money in", invested: "Invested & insured", left: "Left this month", overspent: "Out more than came in",
     recent: "Recent", empty: "Nothing noted yet", emptyHint: "Type something like chai 20 or salary 50000 in the box below and tap Save.",
     daySpent: (x: number) => `${r(x)} spent`, older: "Show older entries",
     backupNudge: "Back up your entries so you don't lose them.", backupBtn: "Back up",
@@ -34,14 +35,14 @@ const en = {
   },
   search: {
     open: "Search and filter", placeholder: "Search: swiggy, 450, auto…", label: "Search entries",
-    anyCat: "All categories", anyPay: "Any payment", kindAll: "In and out", kindOut: "Spent only", kindIn: "Money in only", anyMonth: "Any month",
+    anyCat: "All categories", anyPay: "Any payment", kindAll: "In and out", kindOut: "Spent only", kindIn: "Money in only", kindInvest: "Invest & insure only", anyMonth: "Any month",
     clear: "Clear", results: (n: number, spent: number, inn: number) => `${n === 1 ? "1 entry" : `${n} entries`} · ${r(spent)} spent${inn ? ` · +${r(inn)} in` : ""}`,
     none: "Nothing matches. Try fewer words or clear the filters.",
   },
   add: {
     label: "Add a spend or money in", placeholder: "e.g. chai 20",
     hint: "Amount and what for, in any order. Add “yesterday” or 10/11, “upi” or “cash”. Start with + for money in, or “lent ravi 500”.",
-    category: "Category", date: "Date", paidBy: "Paid by", spent: "Spent", in: "Money in",
+    category: "Category", date: "Date", paidBy: "Paid by", spent: "Spent", in: "Money in", invest: "Invest & insure",
     gave: (p: string) => `You gave ${p}`, got: (p: string) => `${p} gave you`, toPeople: "Saved under People, not in spending",
   },
   err: {
@@ -73,7 +74,7 @@ const en = {
   },
   month: {
     prev: "Previous month", next: "Next month", spentIn: (m: string) => `Spent in ${m}`, count: (n: number) => (n === 1 ? "1 spend" : `${n} spends`),
-    moneyIn: "Money in", saved: "Saved", overspent: "Overspent", none: (m: string) => `No spends noted in ${m}.`, byCat: "By category",
+    moneyIn: "Money in", saved: "Left over", overspent: "Overspent", allTime: "All time", thisMonth: "This month", none: (m: string) => `No spends noted in ${m}.`, byCat: "By category",
     more: (x: number, pct: number) => `${r(x)} more than last month by this day (+${pct}%)`,
     less: (x: number, pct: number) => `${r(x)} less than last month by this day (−${pct}%)`,
     moreFull: (x: number, pct: number) => `${r(x)} more than the month before (+${pct}%)`,
@@ -120,7 +121,8 @@ export type Msg = typeof en;
 
 // Hindi and Kannada: plain, everyday words (written for people new to such apps). Native-speaker review is pending.
 const hi: Msg = {
-  cat: { food: "खाना", groceries: "किराना", travel: "आना-जाना", bills: "बिल", shopping: "खरीदारी", health: "सेहत", rent: "किराया और EMI", other: "अन्य", salary: "वेतन", business: "कारोबार", refund: "रिफंड", income: "अन्य आमदनी" },
+  cat: { food: "खाना", groceries: "किराना", travel: "आना-जाना", bills: "बिल", shopping: "खरीदारी", health: "सेहत", rent: "किराया और EMI", other: "अन्य", salary: "वेतन", business: "कारोबार", refund: "रिफंड", returns: "निवेश से आमदनी", income: "अन्य आमदनी",
+    sip: "SIP और म्यूचुअल फंड", stocks: "शेयर", deposit: "FD और RD", gold: "सोना", retirement: "PPF, NPS और EPF", termIns: "टर्म बीमा", healthIns: "स्वास्थ्य बीमा", otherIns: "अन्य बीमा", invest: "अन्य निवेश" },
   upi: "UPI", cash: "नकद", notSet: "नहीं चुना",
   today: "आज", yesterday: "कल",
   save: "सेव करें", cancel: "रद्द करें", close: "बंद करें", delete: "हटाएँ", undo: "वापस लें", loading: "लोड हो रहा है…", everyMonth: "हर महीने",
@@ -130,7 +132,7 @@ const hi: Msg = {
   theme: to => (to === "dark" ? "डार्क मोड करें" : "लाइट मोड करें"),
   home: {
     h1: app => `${app}: आज और इस महीने`,
-    spentToday: "आज का खर्च", spentMonth: "इस महीने का खर्च", moneyIn: "आमदनी", left: "इस महीने बचा", overspent: "आमदनी से ज़्यादा खर्च",
+    spentToday: "आज का खर्च", spentMonth: "इस महीने का खर्च", moneyIn: "आमदनी", invested: "निवेश और बीमा", left: "इस महीने बचा", overspent: "आमदनी से ज़्यादा गया",
     recent: "हाल के", empty: "अभी कुछ नहीं लिखा", emptyHint: "नीचे के बॉक्स में chai 20 या salary 50000 जैसा लिखें और सेव करें।",
     daySpent: x => `${r(x)} खर्च`, older: "पुराने दिखाएँ",
     backupNudge: "अपनी एंट्री का बैकअप लें ताकि वे खो न जाएँ।", backupBtn: "बैकअप",
@@ -139,14 +141,14 @@ const hi: Msg = {
   },
   search: {
     open: "खोजें और छाँटें", placeholder: "खोजें: swiggy, 450, auto…", label: "एंट्री खोजें",
-    anyCat: "सभी श्रेणियाँ", anyPay: "कोई भी भुगतान", kindAll: "आमदनी और खर्च", kindOut: "सिर्फ़ खर्च", kindIn: "सिर्फ़ आमदनी", anyMonth: "कोई भी महीना",
+    anyCat: "सभी श्रेणियाँ", anyPay: "कोई भी भुगतान", kindAll: "आमदनी और खर्च", kindOut: "सिर्फ़ खर्च", kindIn: "सिर्फ़ आमदनी", kindInvest: "सिर्फ़ निवेश और बीमा", anyMonth: "कोई भी महीना",
     clear: "साफ़ करें", results: (n, spent, inn) => `${n} एंट्री · ${r(spent)} खर्च${inn ? ` · +${r(inn)} आमदनी` : ""}`,
     none: "कुछ नहीं मिला। कम शब्द लिखें या फ़िल्टर हटाएँ।",
   },
   add: {
     label: "खर्च या आमदनी जोड़ें", placeholder: "जैसे chai 20",
     hint: "रकम और किस पर, किसी भी क्रम में। “kal” या 10/11, “upi” या “cash” भी लिख सकते हैं। आमदनी के लिए आगे + लगाएँ, या “lent ravi 500”।",
-    category: "श्रेणी", date: "तारीख", paidBy: "भुगतान", spent: "खर्च", in: "आमदनी",
+    category: "श्रेणी", date: "तारीख", paidBy: "भुगतान", spent: "खर्च", in: "आमदनी", invest: "निवेश और बीमा",
     gave: p => `आपने ${p} को दिए`, got: p => `${p} ने आपको दिए`, toPeople: "‘लोग’ में सेव होगा, खर्च में नहीं",
   },
   err: {
@@ -178,7 +180,7 @@ const hi: Msg = {
   },
   month: {
     prev: "पिछला महीना", next: "अगला महीना", spentIn: m => `${m} में खर्च`, count: n => `${n} खर्च`,
-    moneyIn: "आमदनी", saved: "बचत", overspent: "ज़्यादा खर्च", none: m => `${m} में कोई खर्च नहीं लिखा।`, byCat: "श्रेणी के हिसाब से",
+    moneyIn: "आमदनी", saved: "बचा", overspent: "ज़्यादा खर्च", allTime: "अब तक कुल", thisMonth: "इस महीने", none: m => `${m} में कोई खर्च नहीं लिखा।`, byCat: "श्रेणी के हिसाब से",
     more: (x, pct) => `पिछले महीने इसी दिन तक से ${r(x)} ज़्यादा (+${pct}%)`,
     less: (x, pct) => `पिछले महीने इसी दिन तक से ${r(x)} कम (−${pct}%)`,
     moreFull: (x, pct) => `पिछले महीने से ${r(x)} ज़्यादा (+${pct}%)`,
@@ -223,7 +225,8 @@ const hi: Msg = {
 };
 
 const kn: Msg = {
-  cat: { food: "ಊಟ-ತಿಂಡಿ", groceries: "ದಿನಸಿ", travel: "ಪ್ರಯಾಣ", bills: "ಬಿಲ್‌ಗಳು", shopping: "ಖರೀದಿ", health: "ಆರೋಗ್ಯ", rent: "ಬಾಡಿಗೆ ಮತ್ತು EMI", other: "ಇತರೆ", salary: "ಸಂಬಳ", business: "ವ್ಯಾಪಾರ", refund: "ರಿಫಂಡ್", income: "ಇತರೆ ಆದಾಯ" },
+  cat: { food: "ಊಟ-ತಿಂಡಿ", groceries: "ದಿನಸಿ", travel: "ಪ್ರಯಾಣ", bills: "ಬಿಲ್‌ಗಳು", shopping: "ಖರೀದಿ", health: "ಆರೋಗ್ಯ", rent: "ಬಾಡಿಗೆ ಮತ್ತು EMI", other: "ಇತರೆ", salary: "ಸಂಬಳ", business: "ವ್ಯಾಪಾರ", refund: "ರಿಫಂಡ್", returns: "ಹೂಡಿಕೆ ಆದಾಯ", income: "ಇತರೆ ಆದಾಯ",
+    sip: "SIP ಮತ್ತು ಮ್ಯೂಚುವಲ್ ಫಂಡ್", stocks: "ಷೇರುಗಳು", deposit: "FD ಮತ್ತು RD", gold: "ಚಿನ್ನ", retirement: "PPF, NPS ಮತ್ತು EPF", termIns: "ಟರ್ಮ್ ವಿಮೆ", healthIns: "ಆರೋಗ್ಯ ವಿಮೆ", otherIns: "ಇತರೆ ವಿಮೆ", invest: "ಇತರೆ ಹೂಡಿಕೆ" },
   upi: "UPI", cash: "ನಗದು", notSet: "ಆಯ್ಕೆ ಇಲ್ಲ",
   today: "ಇಂದು", yesterday: "ನಿನ್ನೆ",
   save: "ಉಳಿಸಿ", cancel: "ರದ್ದು", close: "ಮುಚ್ಚಿ", delete: "ಅಳಿಸಿ", undo: "ಹಿಂಪಡೆ", loading: "ಲೋಡ್ ಆಗುತ್ತಿದೆ…", everyMonth: "ಪ್ರತಿ ತಿಂಗಳು",
@@ -233,7 +236,7 @@ const kn: Msg = {
   theme: to => (to === "dark" ? "ಡಾರ್ಕ್ ಮೋಡ್‌ಗೆ ಬದಲಿಸಿ" : "ಲೈಟ್ ಮೋಡ್‌ಗೆ ಬದಲಿಸಿ"),
   home: {
     h1: app => `${app}: ಇಂದು ಮತ್ತು ಈ ತಿಂಗಳು`,
-    spentToday: "ಇಂದಿನ ಖರ್ಚು", spentMonth: "ಈ ತಿಂಗಳ ಖರ್ಚು", moneyIn: "ಆದಾಯ", left: "ಈ ತಿಂಗಳು ಉಳಿದಿದೆ", overspent: "ಆದಾಯಕ್ಕಿಂತ ಹೆಚ್ಚು ಖರ್ಚು",
+    spentToday: "ಇಂದಿನ ಖರ್ಚು", spentMonth: "ಈ ತಿಂಗಳ ಖರ್ಚು", moneyIn: "ಆದಾಯ", invested: "ಹೂಡಿಕೆ ಮತ್ತು ವಿಮೆ", left: "ಈ ತಿಂಗಳು ಉಳಿದಿದೆ", overspent: "ಆದಾಯಕ್ಕಿಂತ ಹೆಚ್ಚು ಖರ್ಚು",
     recent: "ಇತ್ತೀಚಿನವು", empty: "ಇನ್ನೂ ಏನೂ ಬರೆದಿಲ್ಲ", emptyHint: "ಕೆಳಗಿನ ಬಾಕ್ಸ್‌ನಲ್ಲಿ chai 20 ಅಥವಾ salary 50000 ಎಂದು ಬರೆದು ಉಳಿಸಿ.",
     daySpent: x => `${r(x)} ಖರ್ಚು`, older: "ಹಳೆಯವನ್ನು ತೋರಿಸಿ",
     backupNudge: "ನಿಮ್ಮ ನಮೂದುಗಳು ಕಳೆದುಹೋಗದಂತೆ ಬ್ಯಾಕಪ್ ಮಾಡಿ.", backupBtn: "ಬ್ಯಾಕಪ್",
@@ -242,14 +245,14 @@ const kn: Msg = {
   },
   search: {
     open: "ಹುಡುಕಿ ಮತ್ತು ಫಿಲ್ಟರ್ ಮಾಡಿ", placeholder: "ಹುಡುಕಿ: swiggy, 450, auto…", label: "ನಮೂದುಗಳನ್ನು ಹುಡುಕಿ",
-    anyCat: "ಎಲ್ಲಾ ವರ್ಗಗಳು", anyPay: "ಯಾವುದೇ ಪಾವತಿ", kindAll: "ಆದಾಯ ಮತ್ತು ಖರ್ಚು", kindOut: "ಖರ್ಚು ಮಾತ್ರ", kindIn: "ಆದಾಯ ಮಾತ್ರ", anyMonth: "ಯಾವುದೇ ತಿಂಗಳು",
+    anyCat: "ಎಲ್ಲಾ ವರ್ಗಗಳು", anyPay: "ಯಾವುದೇ ಪಾವತಿ", kindAll: "ಆದಾಯ ಮತ್ತು ಖರ್ಚು", kindOut: "ಖರ್ಚು ಮಾತ್ರ", kindIn: "ಆದಾಯ ಮಾತ್ರ", kindInvest: "ಹೂಡಿಕೆ ಮತ್ತು ವಿಮೆ ಮಾತ್ರ", anyMonth: "ಯಾವುದೇ ತಿಂಗಳು",
     clear: "ತೆರವುಗೊಳಿಸಿ", results: (n, spent, inn) => `${n} ನಮೂದು · ${r(spent)} ಖರ್ಚು${inn ? ` · +${r(inn)} ಆದಾಯ` : ""}`,
     none: "ಏನೂ ಸಿಗಲಿಲ್ಲ. ಕಡಿಮೆ ಪದಗಳನ್ನು ಬಳಸಿ ಅಥವಾ ಫಿಲ್ಟರ್ ತೆಗೆಯಿರಿ.",
   },
   add: {
     label: "ಖರ್ಚು ಅಥವಾ ಆದಾಯ ಸೇರಿಸಿ", placeholder: "ಉದಾ. chai 20",
     hint: "ಮೊತ್ತ ಮತ್ತು ಯಾವುದಕ್ಕೆ, ಯಾವ ಕ್ರಮದಲ್ಲಾದರೂ. “yesterday” ಅಥವಾ 10/11, “upi” ಅಥವಾ “cash” ಸೇರಿಸಬಹುದು. ಆದಾಯಕ್ಕೆ ಮುಂದೆ + ಹಾಕಿ, ಅಥವಾ “lent ravi 500”.",
-    category: "ವರ್ಗ", date: "ದಿನಾಂಕ", paidBy: "ಪಾವತಿ", spent: "ಖರ್ಚು", in: "ಆದಾಯ",
+    category: "ವರ್ಗ", date: "ದಿನಾಂಕ", paidBy: "ಪಾವತಿ", spent: "ಖರ್ಚು", in: "ಆದಾಯ", invest: "ಹೂಡಿಕೆ ಮತ್ತು ವಿಮೆ",
     gave: p => `ನೀವು ${p} ಗೆ ಕೊಟ್ಟಿದ್ದು`, got: p => `${p} ನಿಮಗೆ ಕೊಟ್ಟಿದ್ದು`, toPeople: "‘ಜನರು’ ಅಡಿಯಲ್ಲಿ ಉಳಿಸಲಾಗುತ್ತದೆ, ಖರ್ಚಿನಲ್ಲಿ ಅಲ್ಲ",
   },
   err: {
@@ -281,7 +284,7 @@ const kn: Msg = {
   },
   month: {
     prev: "ಹಿಂದಿನ ತಿಂಗಳು", next: "ಮುಂದಿನ ತಿಂಗಳು", spentIn: m => `${m} ರಲ್ಲಿ ಖರ್ಚು`, count: n => `${n} ಖರ್ಚು`,
-    moneyIn: "ಆದಾಯ", saved: "ಉಳಿತಾಯ", overspent: "ಹೆಚ್ಚು ಖರ್ಚು", none: m => `${m} ರಲ್ಲಿ ಯಾವುದೇ ಖರ್ಚು ಬರೆದಿಲ್ಲ.`, byCat: "ವರ್ಗವಾರು",
+    moneyIn: "ಆದಾಯ", saved: "ಉಳಿದದ್ದು", overspent: "ಹೆಚ್ಚು ಖರ್ಚು", allTime: "ಇಲ್ಲಿಯವರೆಗೆ ಒಟ್ಟು", thisMonth: "ಈ ತಿಂಗಳು", none: m => `${m} ರಲ್ಲಿ ಯಾವುದೇ ಖರ್ಚು ಬರೆದಿಲ್ಲ.`, byCat: "ವರ್ಗವಾರು",
     more: (x, pct) => `ಹಿಂದಿನ ತಿಂಗಳ ಇದೇ ದಿನಕ್ಕಿಂತ ${r(x)} ಹೆಚ್ಚು (+${pct}%)`,
     less: (x, pct) => `ಹಿಂದಿನ ತಿಂಗಳ ಇದೇ ದಿನಕ್ಕಿಂತ ${r(x)} ಕಡಿಮೆ (−${pct}%)`,
     moreFull: (x, pct) => `ಹಿಂದಿನ ತಿಂಗಳಿಗಿಂತ ${r(x)} ಹೆಚ್ಚು (+${pct}%)`,

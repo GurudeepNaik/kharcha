@@ -1,5 +1,5 @@
 // Backup file, restore (with a preview of what changes) and the spreadsheet export.
-import { isCategory, isIncomeCategory, categoryLabel, type Category } from "./categories";
+import { isCategory, isSpendCategory, kindOf, categoryLabel, type Category } from "./categories";
 import { validDate } from "./dates";
 import { MAX_PAISE, plainAmount } from "./money";
 import type { Debt } from "./debts";
@@ -111,7 +111,7 @@ export function readBackup(text: string): { ok: true; value: Backup } | { ok: fa
   const categoryLimits: CategoryLimits = {};
   if (s.categoryLimits && typeof s.categoryLimits === "object") {
     for (const [k, v] of Object.entries(s.categoryLimits as Record<string, unknown>)) {
-      if (isCategory(k) && !isIncomeCategory(k) && typeof v === "number" && Number.isInteger(v) && v > 0 && v <= MAX_PAISE) categoryLimits[k as keyof CategoryLimits] = v;
+      if (isCategory(k) && isSpendCategory(k) && typeof v === "number" && Number.isInteger(v) && v > 0 && v <= MAX_PAISE) categoryLimits[k as keyof CategoryLimits] = v;
     }
   }
   const limit = s.monthlyLimitPaise;
@@ -144,7 +144,7 @@ export function toCsv(rows: Expense[], debts: Debt[] = []): string {
   const lines = ["Date,Type,Amount (₹),Category,Note,Paid by"];
   const out: [string, string, string][] = [];
   for (const e of rows) {
-    out.push([e.date, e.createdAt, [e.date, isIncomeCategory(e.category) ? "Money in" : "Spent", plainAmount(e.amountPaise), categoryLabel(e.category), cell(e.note), e.method === "upi" ? "UPI" : e.method === "cash" ? "Cash" : ""].join(",")]);
+    out.push([e.date, e.createdAt, [e.date, { in: "Money in", spend: "Spent", invest: "Invested / insurance" }[kindOf(e.category)], plainAmount(e.amountPaise), categoryLabel(e.category), cell(e.note), e.method === "upi" ? "UPI" : e.method === "cash" ? "Cash" : ""].join(",")]);
   }
   for (const d of debts) {
     const note = d.note ? `${d.person}: ${d.note}` : d.person;

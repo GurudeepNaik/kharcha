@@ -59,9 +59,10 @@ console.log(`DEBTS OK (${DEBTS.length} read, 5 left as spends)`);
 // ---------- Trends ----------
 const e = (date: string, rs: number, category = "food", i = 0): Expense => ({ id: `eeeeeeee-0000-4000-8000-${String(i).padStart(12, "0")}`, amountPaise: rs * 100, note: "", category: category as Expense["category"], method: null, date, createdAt: "2026-11-01T00:00:00.000Z", updatedAt: "2026-11-01T00:00:00.000Z" });
 const tr = [e("2026-11-01", 100, "food", 1), e("2026-11-01", 50, "food", 2), e("2026-11-12", 20, "food", 3), e("2026-11-05", 50000, "salary", 4), e("2026-10-03", 70, "food", 5), e("2026-10-20", 400, "food", 6), e("2026-06-10", 10, "food", 7)];
+tr.push(e("2026-11-01", 5000, "sip", 8), e("2026-11-01", 900, "healthIns", 9));
 const daily = TR.dailySpend(tr, "2026-11", NOW);
 assert.equal(daily.length, 12, "only up to today");
-assert.deepEqual([daily[0], daily[4], daily[11]], [15000, 0, 2000], "salary isn't spending");
+assert.deepEqual([daily[0], daily[4], daily[11]], [15000, 0, 2000], "salary, SIP and insurance aren't day-to-day spending");
 assert.equal(TR.dailySpend(tr, "2026-10", NOW).length, 31);
 assert.deepEqual(TR.monthTotals(tr, "2026-11", 6).map(m => [m.month, m.paise]), [["2026-06", 1000], ["2026-07", 0], ["2026-08", 0], ["2026-09", 0], ["2026-10", 47000], ["2026-11", 17000]]);
 assert.deepEqual(TR.vsLastMonth(tr, "2026-11", NOW), { now: 17000, then: 7000 }, "Oct up to the 12th = 70 only");
@@ -85,6 +86,11 @@ assert.deepEqual(ids({ method: "none" }), ["shirt", "salary"]);
 assert.deepEqual(ids({ kind: "in" }), ["salary"]);
 assert.deepEqual(ids({ kind: "out", month: "2026-11" }), ["swiggy dinner", "auto"]);
 assert.deepEqual(ids({ category: "shopping" }), ["shirt"]);
+{
+  const withInv = [...sr, { ...e("2026-11-06", 5000, "sip", 9), note: "sip" }];
+  assert.deepEqual(SE.filterRows(withInv, { ...SE.EMPTY_FILTER, kind: "invest" }).map(x => x.note), ["sip"]);
+  assert.ok(!SE.filterRows(withInv, { ...SE.EMPTY_FILTER, kind: "out" }).some(x => x.note === "sip"), "spent-only excludes investments");
+}
 assert.deepEqual(ids({ q: "zzz" }), []);
 assert.equal(SE.isFiltering(SE.EMPTY_FILTER), false);
 console.log("SEARCH OK");
@@ -102,6 +108,7 @@ assert.equal(bad({ dir: "stole" }), false); assert.equal(bad({ person: "" }), fa
 const v2 = B.readBackup(JSON.stringify({ kind: "expense-tracker-backup", version: 2, expenses: [], learned: [], repeats: [], settings: { monthlyLimitPaise: 100 } }));
 assert.ok(v2.ok && v2.value.debts.length === 0 && Object.keys(v2.value.settings.categoryLimits).length === 0, "version 2 file reads");
 assert.equal(B.readBackup(JSON.stringify({ kind: "expense-tracker-backup", version: 3, expenses: [], learned: [], settings: { categoryLimits: { salary: 100, food: -1, junk: 5 } } })).ok && true, true);
+assert.ok(B.toCsv([e("2026-11-01", 5000, "sip", 1)]).includes("2026-11-01,Invested / insurance,5000,SIP & mutual funds,"));
 const csv = B.toCsv([], [ds[0]!]);
 assert.ok(csv.includes("2026-11-01,Gave (lent or repaid),500,People,Ravi,"));
 console.log("BACKUP V3 OK");
