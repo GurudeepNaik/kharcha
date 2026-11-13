@@ -3,7 +3,7 @@
 // Language, monthly limit, budgets per category, statement import, backup, restore and the spreadsheet export.
 import { useEffect, useRef, useState } from "react";
 import { APP_NAME } from "@/lib/brand";
-import { MAX_BACKUP_BYTES, makeBackup, planRestore, readBackup, toCsv, type Backup } from "@/lib/backup";
+import { MAX_BACKUP_BYTES, planRestore, readBackup, toCsv, type Backup } from "@/lib/backup";
 import { CATEGORIES, type Category, type SpendCategory } from "@/lib/categories";
 import { today } from "@/lib/dates";
 import type { Debt } from "@/lib/debts";
