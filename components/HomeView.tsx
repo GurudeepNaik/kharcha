@@ -14,7 +14,8 @@ import { byCategory, byDay, incomes, inMonth, invests, onDay, spends, sum } from
 import type { Expense, Settings } from "@/lib/types";
 import { InHandCard } from "./InHandCard";
 import { LimitLine } from "./LimitLine";
-import type { Debt } from "@/lib/debts";
+import { daysBetween, oldestOwed, whatsappLink, type Debt } from "@/lib/debts";
+import { reminderText } from "./PeopleView";
 import type { InHand } from "@/lib/inhand";
 import type { Account, Transfer } from "@/lib/wealth";
 import { Icon, SpendRow, Svg, card } from "./ui";
@@ -46,6 +47,7 @@ export function HomeView({ rows, debts, accounts, transfers, onInHand, onDriveBa
   const driveNudge = driveEnabled() && settings.driveOn && rows.length > 0 && Date.now() - since >= 7 * DAY_MS;
   const needBackup = !driveNudge && rows.length >= 20 && Date.now() - since >= 30 * DAY_MS;
   const [driveBusy, setDriveBusy] = useState(false);
+  const owed = oldestOwed(debts, now);
   useEffect(() => { if (driveNudge) void prepareDrive().catch(() => undefined); }, [driveNudge]);
 
   // Categories at 85% or more of their budget this month.
@@ -135,6 +137,12 @@ export function HomeView({ rows, debts, accounts, transfers, onInHand, onDriveBa
           <p className="flex-1">{t.drive.nudge}</p>
           <button type="button" disabled={driveBusy} onClick={async () => { setDriveBusy(true); try { await onDriveBackup(); } finally { setDriveBusy(false); } }}
             className="press min-h-11 shrink-0 rounded-xl bg-card px-3 font-semibold disabled:opacity-60">{driveBusy ? t.drive.working : t.drive.nudgeBtn}</button>
+        </div>
+      )}
+      {owed && (
+        <div className="mt-3 flex items-center gap-3 rounded-2xl border border-line bg-card p-3 ps-4 text-[14px]" data-testid="owed-nudge">
+          <p className="num flex-1">{t.people.remindHome(owed.name, owed.paise, t.people.for(daysBetween(owed.since, now)))}</p>
+          <a href={whatsappLink(reminderText(owed, i, settings.upiId))} target="_blank" rel="noopener noreferrer" className="press grid min-h-11 shrink-0 place-items-center rounded-xl bg-accent px-3 font-semibold text-accent-fg">{t.people.remindShort}</a>
         </div>
       )}
       {needBackup && (

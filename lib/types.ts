@@ -1,4 +1,5 @@
 import type { InHand } from "./inhand";
+import type { LockData } from "./lock";
 import type { Category, SpendCategory } from "./categories";
 import type { TaxTag } from "./tax";
 import type { Method } from "./parse";
@@ -46,5 +47,9 @@ export interface Settings {
   notify: boolean;
   /** Backed up to Google Drive from this phone before (shows the weekly one-tap nudge). */
   driveOn: boolean;
+  /** App lock (this phone only; never in backups). */
+  lock: LockData | null;
+  /** Your UPI ID, added to WhatsApp reminders so people can pay you back. */
+  upiId: string | null;
 }
-export const DEFAULT_SETTINGS: Settings = { monthlyLimitPaise: null, lastBackupAt: null, categoryLimits: {}, seniorSelf: false, seniorParents: false, upiAccount: null, cashAccount: null, inHand: null, notify: false, driveOn: false };
+export const DEFAULT_SETTINGS: Settings = { monthlyLimitPaise: null, lastBackupAt: null, categoryLimits: {}, seniorSelf: false, seniorParents: false, upiAccount: null, cashAccount: null, inHand: null, notify: false, driveOn: false, lock: null, upiId: null };

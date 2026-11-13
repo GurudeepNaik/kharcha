@@ -2,13 +2,19 @@
 
 // Lent and borrowed: who owes you, whom you owe, and each person's history.
 import { useState } from "react";
-import { balances, owedToYou, personKey, youOwe, type Debt, type Direction } from "@/lib/debts";
+import { UPI_ID, balances, daysBetween, owedToYou, personKey, whatsappLink, youOwe, type Balance, type Debt, type Direction } from "@/lib/debts";
+import type { I18n } from "@/lib/i18n";
 import { dateText, useI18n } from "@/lib/i18n";
 import { readRupees, rupees } from "@/lib/money";
-import { Sheet, SheetHead, btnPrimary, card } from "./ui";
+import { Sheet, SheetHead, btnLine, btnPrimary, card } from "./ui";
 
-export function PeopleView({ debts, now, onAdd, onDelete }: {
-  debts: Debt[]; now: string;
+/** The WhatsApp message for someone who owes you. */
+export function reminderText(b: Balance, i: I18n, upi: string | null) {
+  return i.t.people.message(b.name, b.paise, dateText(b.since, i), b.notes.slice(-3).join(", "), upi ?? "");
+}
+
+export function PeopleView({ debts, now, onAdd, onDelete, upiId, onUpi }: {
+  debts: Debt[]; now: string; upiId: string | null; onUpi: (v: string | null) => Promise<void>;
   onAdd: (d: { person: string; dir: Direction; amountPaise: number; note: string; date: string }) => Promise<void>;
   onDelete: (d: Debt) => Promise<void>;
 }) {
@@ -42,6 +48,7 @@ export function PeopleView({ debts, now, onAdd, onDelete }: {
                   <span className="block truncate font-medium">{b.name}</span>
                   <span className={`num block text-[13px] ${b.paise > 0 ? "text-accent" : b.paise < 0 ? "text-bad" : "text-muted"}`}>
                     {b.paise > 0 ? t.people.oweYou(b.name, b.paise) : b.paise < 0 ? t.people.youOweP(b.name, -b.paise) : t.people.settled}
+                    {b.paise !== 0 && <span className="text-muted"> · {t.people.for(daysBetween(b.since, now))}</span>}
                   </span>
                 </span>
               </button>
@@ -51,6 +58,7 @@ export function PeopleView({ debts, now, onAdd, onDelete }: {
       )}
 
       <AddForm now={now} onAdd={onAdd} />
+      {bs.some(b => b.paise > 0) && <UpiField value={upiId} onSave={onUpi} />}
 
       <Sheet open={!!open} onClose={() => setOpenKey(null)} label={open?.name ?? ""}>
         {open && (
@@ -59,6 +67,11 @@ export function PeopleView({ debts, now, onAdd, onDelete }: {
             <p className={`num text-lg font-semibold ${open.paise > 0 ? "text-accent" : open.paise < 0 ? "text-bad" : "text-muted"}`} data-testid="person-balance">
               {open.paise > 0 ? t.people.oweYou(open.name, open.paise) : open.paise < 0 ? t.people.youOweP(open.name, -open.paise) : t.people.settled}
             </p>
+            {open.paise > 0 && (
+              <a href={whatsappLink(reminderText(open, i, upiId))} target="_blank" rel="noopener noreferrer" className={`${btnLine} mt-3 flex w-full items-center justify-center`} data-testid="remind-whatsapp">
+                {t.people.remind}
+              </a>
+            )}
             {open.paise !== 0 && (
               <button type="button" className={`${btnPrimary} mt-3 w-full`}
                 onClick={() => void onAdd({ person: open.name, dir: open.paise > 0 ? "got" : "gave", amountPaise: Math.abs(open.paise), note: t.people.settle, date: now })}>
@@ -132,6 +145,28 @@ function AddForm({ now, onAdd }: { now: string; onAdd: (d: { person: string; dir
       <label htmlFor="p-note" className="mt-3 mb-1 block text-sm font-medium">{t.people.note}</label>
       <input id="p-note" value={note} onChange={e => setNote(e.target.value)} maxLength={60} autoComplete="off" className="field" />
       <button type="submit" className={`${btnPrimary} mt-3 w-full`}>{t.people.save}</button>
+    </form>
+  );
+}
+
+function UpiField({ value, onSave }: { value: string | null; onSave: (v: string | null) => Promise<void> }) {
+  const { t } = useI18n();
+  const [v, setV] = useState(value ?? "");
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <form className={`${card} p-4`} noValidate onSubmit={async e => {
+      e.preventDefault();
+      const x = v.trim();
+      if (x && !UPI_ID.test(x)) { setErr(t.people.upiBad); return; }
+      setErr(null); await onSave(x || null);
+    }}>
+      <label htmlFor="upi-id" className="mb-1 block text-sm font-medium">{t.people.upi}</label>
+      <div className="flex gap-2">
+        <input id="upi-id" value={v} onChange={e => { setV(e.target.value); setErr(null); }} placeholder={t.people.upiHint} autoComplete="off" autoCapitalize="none" spellCheck={false}
+          aria-invalid={!!err || undefined} className="field min-w-0 flex-1" />
+        <button type="submit" className={btnLine} data-testid="upi-save">{t.save}</button>
+      </div>
+      {err && <p role="alert" className="mt-1 text-sm text-bad">{err}</p>}
     </form>
   );
 }

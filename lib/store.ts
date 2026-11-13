@@ -1,6 +1,8 @@
 // Everything is saved in the browser's IndexedDB on this phone. Nothing is sent anywhere.
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { validInHand } from "./inhand";
+import { validLock } from "./lock";
+import { UPI_ID } from "./debts";
 import type { Category } from "./categories";
 import { sortRows } from "./totals";
 import type { Debt } from "./debts";
@@ -23,6 +25,12 @@ interface Schema extends DBSchema {
 }
 
 let dbp: Promise<IDBPDatabase<Schema>> | null = null;
+/** Deletes everything this app keeps on the phone (forgot-PIN way out). The page must reload afterwards. */
+export async function eraseAll() {
+  if (dbp) { (await dbp).close(); dbp = null; }
+  await new Promise<void>(res => { const r = indexedDB.deleteDatabase("expenses"); r.onsuccess = r.onerror = r.onblocked = () => res(); });
+  try { await caches.delete("remind-log"); } catch { /* fine */ }
+}
 function db() {
   // The database name stays neutral so the app can be renamed without losing anyone's data.
   dbp ??= openDB<Schema>("expenses", 5, {
@@ -69,7 +77,7 @@ export async function learn(word: string, category: Category) { await (await db(
 
 export async function getSettings(): Promise<Settings> {
   const d = await db();
-  const [limit, last, cats, ss, sp, ua, ca, ih, nt, dr] = await Promise.all(["monthlyLimitPaise", "lastBackupAt", "categoryLimits", "seniorSelf", "seniorParents", "upiAccount", "cashAccount", "inHand", "notify", "driveOn"].map(k => d.get("settings", k)));
+  const [limit, last, cats, ss, sp, ua, ca, ih, nt, dr, lk, up] = await Promise.all(["monthlyLimitPaise", "lastBackupAt", "categoryLimits", "seniorSelf", "seniorParents", "upiAccount", "cashAccount", "inHand", "notify", "driveOn", "lock", "upiId"].map(k => d.get("settings", k)));
   return {
     monthlyLimitPaise: typeof limit === "number" ? limit : DEFAULT_SETTINGS.monthlyLimitPaise,
     lastBackupAt: typeof last === "string" ? last : DEFAULT_SETTINGS.lastBackupAt,
@@ -81,6 +89,8 @@ export async function getSettings(): Promise<Settings> {
     inHand: validInHand(ih),
     notify: nt === true,
     driveOn: dr === true,
+    lock: validLock(lk),
+    upiId: typeof up === "string" && UPI_ID.test(up) ? up : null,
   };
 }
 export async function saveSettings(s: Partial<Settings>) {

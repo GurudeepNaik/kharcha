@@ -15,13 +15,16 @@ import { dateText } from "@/lib/i18n";
 import { BarChart } from "./BarChart";
 import { LimitLine } from "./LimitLine";
 import { TaxCard } from "./TaxCard";
-import { Icon, SpendRow, Svg, card } from "./ui";
+import { Icon, SpendRow, Svg, btnLine, card } from "./ui";
+import { APP_NAME } from "@/lib/brand";
+import { canvasToPng, drawSummary } from "@/lib/summary";
 import { YearView } from "./YearView";
 
 type Props = {
   rows: Expense[]; now: string; settings: Settings; repeats: { category: Category; amountPaise: number }[]; onOpen: (e: Expense) => void; isRepeating: (e: Expense) => boolean;
   onSettings: (s: Partial<Settings>) => Promise<void>;
   /** Money in hand at the start and end of a month (null before it was set). */
+  say: (s: string) => void;
   handFor: (month: string) => { start: number | null; end: number; current: boolean } | null;
 };
 
@@ -42,7 +45,7 @@ export function MonthView(props: Props) {
   );
 }
 
-function MonthBody({ rows, now, settings, repeats, onOpen, isRepeating, onSettings, handFor }: Props) {
+function MonthBody({ rows, now, settings, repeats, onOpen, isRepeating, onSettings, handFor, say }: Props) {
   const i = useI18n();
   const { t } = i;
   const current = monthOf(now);
@@ -66,6 +69,23 @@ function MonthBody({ rows, now, settings, repeats, onOpen, isRepeating, onSettin
   const six = monthTotals(rows, month, 6);
   const isCurrent = month === current;
   const hand = handFor(month);
+  async function sharePicture() {
+    const font = getComputedStyle(document.body).fontFamily || "sans-serif";
+    const cv = drawSummary({
+      app: APP_NAME, month: monthText(month, i),
+      labels: { in: t.month.moneyIn, spent: t.add.spent, invested: t.home.invested, left: t.summary.left, overspent: t.month.overspent, top: t.summary.top, inHand: t.hand.title, madeWith: t.summary.madeWith },
+      moneyIn, spent: total, invested, inHand: hand ? hand.end : null,
+      top: cats.slice(0, 4).map(c => ({ label: t.cat[c.category], paise: c.paise })), rupees,
+    }, font);
+    const file = new File([await canvasToPng(cv)], `${APP_NAME.toLowerCase()}-${month}.png`, { type: "image/png" });
+    try {
+      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); return; }
+    } catch (e) { if ((e as Error).name === "AbortError") return; }
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    say(t.summary.saved);
+  }
   const signed = (x: number) => `${x < 0 ? "−" : ""}${rupees(Math.abs(x))}`;
   const notes = insights(rows, month, now, repeats, settings.monthlyLimitPaise);
   const noteText = (n: Insight): string => {
@@ -120,6 +140,9 @@ function MonthBody({ rows, now, settings, repeats, onOpen, isRepeating, onSettin
             {hand.start !== null && <div className="flex justify-between gap-3"><dt className="text-sm text-muted">{t.hand.started}</dt><dd className="num font-bold">{signed(hand.start)}</dd></div>}
             <div className="flex justify-between gap-3"><dt className="text-sm text-muted">{hand.current ? t.hand.nowLabel : t.hand.ended}</dt><dd className={`num font-bold ${hand.end < 0 ? "text-bad" : ""}`} data-testid="month-hand-end">{signed(hand.end)}</dd></div>
           </dl>
+        )}
+        {(total > 0 || moneyIn > 0) && (
+          <button type="button" onClick={() => void sharePicture()} className={`${btnLine} mt-3 w-full`} data-testid="share-summary">{t.summary.share}</button>
         )}
         {isCurrent && settings.monthlyLimitPaise && <LimitLine spent={total} limit={settings.monthlyLimitPaise} month={month} now={now} />}
       </div>

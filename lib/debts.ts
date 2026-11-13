@@ -41,15 +41,22 @@ export function parseDebt(text: string, now: string): DebtParse | null {
   return { ok: true, value: { person: titleCase(person), dir, amountPaise: p.value.amountPaise, date: p.value.date } };
 }
 
-export interface Balance { key: string; name: string; paise: number; last: string; count: number }
+export interface Balance {
+  key: string; name: string; paise: number; last: string; count: number;
+  /** When the current balance started (the day it last went from settled to owing), and what it's for. */
+  since: string; notes: string[];
+}
 
 /** Per person: positive = they owe you, negative = you owe them. Settled people (0) stay listed, last. */
 export function balances(debts: Debt[]): Balance[] {
   const m = new Map<string, Balance>();
   for (const d of [...debts].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt))) {
     const k = personKey(d.person);
-    const b = m.get(k) ?? { key: k, name: d.person, paise: 0, last: d.date, count: 0 };
+    const b = m.get(k) ?? { key: k, name: d.person, paise: 0, last: d.date, count: 0, since: d.date, notes: [] };
+    const before = b.paise;
     b.paise += d.dir === "gave" ? d.amountPaise : -d.amountPaise;
+    if (before === 0 || Math.sign(before) !== Math.sign(b.paise)) { b.since = d.date; b.notes = []; }
+    if (d.note && Math.sign(b.paise) === (d.dir === "gave" ? 1 : -1) && !b.notes.includes(d.note)) b.notes.push(d.note);
     b.name = d.person; b.last = d.date; b.count++;
     m.set(k, b);
   }
@@ -58,3 +65,17 @@ export function balances(debts: Debt[]): Balance[] {
 
 export const owedToYou = (bs: Balance[]) => bs.reduce((s, b) => s + Math.max(b.paise, 0), 0);
 export const youOwe = (bs: Balance[]) => bs.reduce((s, b) => s + Math.max(-b.paise, 0), 0);
+
+/** Whole days between two YYYY-MM-DD dates. */
+export const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+
+/** WhatsApp link with the message ready; the person picks the chat (no phone number needed). */
+export const whatsappLink = (text: string) => `https://wa.me/?text=${encodeURIComponent(text)}`;
+
+/** The oldest money owed to you, if it's been a while: for the Home nudge. */
+export function oldestOwed(debts: Debt[], now: string, minDays = 14): Balance | null {
+  return balances(debts).filter(b => b.paise > 0 && daysBetween(b.since, now) >= minDays).sort((a, b) => a.since.localeCompare(b.since))[0] ?? null;
+}
+
+/** A UPI ID: name@bank. */
+export const UPI_ID = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9]{1,32}$/;

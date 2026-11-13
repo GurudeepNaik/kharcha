@@ -12,6 +12,7 @@ import { readRupees } from "@/lib/money";
 import type { CategoryLimits, Expense, Settings } from "@/lib/types";
 import { Sheet, SheetHead, btnLine, btnPrimary, card } from "./ui";
 import { ImportCard } from "./ImportCard";
+import { LockCard } from "./LockCard";
 import type { ImportItem } from "@/lib/statement";
 import type { BackupExtra } from "@/lib/backup";
 import { backupJson } from "@/lib/backupJson";
@@ -193,6 +194,8 @@ export function SettingsView({ rows, learned, debts, settings, persisted, extra,
         <p className="min-w-0 flex-1 text-sm text-muted">{t.pay.empty}</p>
         <button type="button" onClick={onPayments} className={`${btnLine} shrink-0`}>{t.pay.title}</button>
       </div>
+
+      <LockCard lock={settings.lock} onSettings={onSettings} say={say} />
 
       <ImportCard rows={rows} learned={learned} accounts={extra.accounts} onImport={onImport} />
 

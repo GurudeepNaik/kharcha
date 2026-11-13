@@ -768,6 +768,69 @@ ok("a damaged file is refused", (await text(fresh, "[role=alert]")).includes("da
   await p.close();
 }
 
+// ---------- App lock ----------
+{
+  const p = await phone();
+  await add(p, "chai 20");
+  await clickText(p, "Settings", "nav button"); await p.waitForSelector("[data-testid=lock-set]");
+  await tap(p, "[data-testid=lock-set]");
+  await p.type("#lock-a", "2468"); await p.type("#lock-b", "1357"); await tap(p, "[data-testid=lock-save]");
+  ok("PINs that differ are refused", (await text(p, "[data-testid=lock-card] [role=alert]")) === "The two PINs don't match.");
+  await p.click("#lock-b", { count: 3 }); await p.keyboard.press("Backspace"); await p.type("#lock-b", "2468"); await tap(p, "[data-testid=lock-save]");
+  await p.waitForSelector("[data-testid=lock-off]");
+  ok("lock turned on without locking you out right away", !(await p.$("[data-testid=lock]")));
+  const stored = await p.evaluate(() => new Promise<string>(res => { const r = indexedDB.open("expenses"); r.onsuccess = () => { const q = r.result.transaction("settings").objectStore("settings").get("lock"); q.onsuccess = () => { res(JSON.stringify(q.result)); r.result.close(); }; }; }));
+  ok("the PIN itself isn't stored", !stored.includes("2468") && stored.includes("hash"));
+  await p.reload({ waitUntil: "networkidle2" }); await p.waitForSelector("[data-testid=lock]");
+  ok("reopening shows the lock screen and no data", !(await p.$("#entry")) && !(await p.$("nav")));
+  for (const k of "1111") await p.click(`[data-key="${k}"]`);
+  await p.waitForFunction(() => document.querySelector("[data-testid=lock-msg]")?.textContent === "Wrong PIN", { timeout: 5000 }).catch(() => undefined);
+  ok("wrong PIN says so", (await text(p, "[data-testid=lock-msg]")) === "Wrong PIN");
+  for (const k of "2468") await p.click(`[data-key="${k}"]`);
+  await p.waitForSelector("nav", { timeout: 5000 }).catch(() => undefined);
+  ok("right PIN opens the app", !!(await p.$("nav")) && !(await p.$("[data-testid=lock]")));
+  await clickText(p, "Settings", "nav button"); await p.waitForSelector("[data-testid=lock-off]");
+  await tap(p, "[data-testid=lock-off]"); await p.type("#lock-off", "2468"); await tap(p, "[data-testid=lock-off-go]");
+  await p.waitForSelector("[data-testid=lock-set]");
+  await p.reload({ waitUntil: "networkidle2" }); await p.waitForSelector("nav");
+  ok("lock off: opens straight in", !(await p.$("[data-testid=lock]")));
+  await p.close();
+}
+
+// ---------- Month picture to share ----------
+{
+  const p = await phone();
+  await add(p, "salary 50000"); await add(p, "rent 15000"); await add(p, "swiggy 450"); await add(p, "sip 5000");
+  await clickText(p, "Month", "nav button"); await p.waitForSelector("[data-testid=share-summary]");
+  const dir = await mkdtemp(join(tmpdir(), "kharcha-png-"));
+  await (await p.createCDPSession()).send("Page.setDownloadBehavior", { behavior: "allow", downloadPath: dir });
+  await p.evaluate(() => { Object.defineProperty(navigator, "canShare", { value: undefined }); }); // desktop: no share sheet, so it saves the file
+  await tap(p, "[data-testid=share-summary]");
+  let png: Buffer | null = null;
+  for (let k = 0; k < 25 && !png; k++) { await wait(200); const f = (await readdir(dir)).find(x => x.endsWith(".png")); if (f) png = await readFile(join(dir, f)); }
+  ok(`month picture saved, 1080×1350 (${png ? `${png.readUInt32BE(16)}×${png.readUInt32BE(20)}, ${Math.round(png.length / 1024)} KB` : "none"})`, !!png && png.readUInt32BE(16) === 1080 && png.readUInt32BE(20) === 1350 && png.length > 20_000);
+  await p.close();
+}
+
+// ---------- Money owed: WhatsApp reminder ----------
+{
+  const p = await phone();
+  const old = new Date(Date.now() - 20 * 86_400_000); const oldDay = `${old.getFullYear()}-${String(old.getMonth() + 1).padStart(2, "0")}-${String(old.getDate()).padStart(2, "0")}`;
+  await p.evaluate((day: string) => new Promise<void>(res => { const r = indexedDB.open("expenses"); r.onsuccess = () => { const tx = r.result.transaction("debts", "readwrite");
+    tx.objectStore("debts").put({ id: "dddddddd-0000-4000-8000-000000000001", person: "Ravi", dir: "gave", amountPaise: 60000, note: "dinner · split", date: day, createdAt: `${day}T09:00:00.000Z`, updatedAt: `${day}T09:00:00.000Z` });
+    tx.oncomplete = () => { r.result.close(); res(); }; }; }), oldDay);
+  await p.reload({ waitUntil: "networkidle2" }); await p.waitForSelector("#entry");
+  ok("Home: Ravi owes you ₹600 for 2 weeks", (await text(p, "[data-testid=owed-nudge] p")) === "Ravi owes you ₹600 for 2 weeks");
+  await clickText(p, "Wealth", "nav button"); await p.waitForSelector("#upi-id");
+  await p.type("#upi-id", "me@okaxis"); await tap(p, "[data-testid=upi-save]"); await wait(300);
+  await clickText(p, "Ravi", "[data-testid=people] button span span");
+  await p.waitForSelector("[data-testid=remind-whatsapp]");
+  const href = await p.$eval("[data-testid=remind-whatsapp]", a => (a as HTMLAnchorElement).href);
+  const msg = decodeURIComponent(href.split("text=")[1] ?? "");
+  ok(`WhatsApp message ready (${msg.slice(0, 70)}…)`, href.startsWith("https://wa.me/?text=") && msg.includes("₹600") && msg.includes("dinner · split") && msg.includes("me@okaxis"));
+  await p.close();
+}
+
 // ---------- Phone widths, keyboard ----------
 for (const w of [320, 390]) {
   const p = await phone(w);

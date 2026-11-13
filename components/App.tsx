@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RELOCK_MS } from "@/lib/lock";
+import { LockScreen } from "./LockScreen";
 import { DriveError, connectDrive, saveToDrive } from "@/lib/drive";
 import { backupJson } from "@/lib/backupJson";
 import { disableNotify, enableNotify, notifyPermission, setRemindLang, showReminders } from "@/lib/notify";
@@ -22,7 +24,7 @@ import { receiptToLine } from "@/lib/receipt";
 import { sharedToLine } from "@/lib/share";
 import {
   all, allDebts, allExpenses, allRepeats, applyPlanDue, applyRestore, del, deleteDebt, deleteExpense, deletePhoto, getPhoto, getSettings, keepData, learn, learnedMap, migrateRepeats, newId,
-  put, putDebt, putExpense, putPhoto, saveSettings,
+  eraseAll, put, putDebt, putExpense, putPhoto, saveSettings,
 } from "@/lib/store";
 import { inMonth, sortRows, sum } from "@/lib/totals";
 import { DEFAULT_SETTINGS, type Expense, type Settings } from "@/lib/types";
@@ -131,6 +133,17 @@ export function App() {
   }, []);
 
   const loaded = rows !== null;
+  // App lock: locked on open, and again after a minute away.
+  const [unlocked, setUnlocked] = useState(false);
+  const hiddenAt = useRef<number | null>(null);
+  useEffect(() => {
+    const v = () => {
+      if (document.hidden) hiddenAt.current = Date.now();
+      else if (hiddenAt.current && Date.now() - hiddenAt.current > RELOCK_MS) setUnlocked(false);
+    };
+    document.addEventListener("visibilitychange", v);
+    return () => document.removeEventListener("visibilitychange", v);
+  }, []);
   // Shared text / shortcut: once the add box exists, fill or focus it.
   useEffect(() => {
     if (!loaded || !pending.current) return;
@@ -452,18 +465,18 @@ export function App() {
           onRemovePayment={e => remove(e)} onSaveItem={savePlan} onDeleteItem={deletePlan}
           notify={settings.notify} onNotify={setNotify} say={x => say(x)} />}
         {tab === "month" && <MonthView rows={rows} now={now} settings={settings} repeats={plan.filter(x => x.every === 1 && x.amountPaise && x.kind !== "income").map(x => ({ category: x.category, amountPaise: x.amountPaise! }))} onOpen={setEditing} isRepeating={isRepeating} onSettings={updateSettings}
-          handFor={m => (settings.inHand ? monthInHand(settings.inHand, rows, debts, accounts, transfers, m, now) : null)} />}
+          say={x => say(x)} handFor={m => (settings.inHand ? monthInHand(settings.inHand, rows, debts, accounts, transfers, m, now) : null)} />}
         {tab === "wealth" && (
           <>
             <WealthView rows={rows} now={now} accounts={accounts} transfers={transfers} holdings={holdings} goals={goals} settings={settings} planLoans={planLoans}
               onSave={saveItem} onDelete={deleteItem} onSettings={updateSettings} say={x => say(x)} />
-            <div className="mt-8"><PeopleView debts={debts} now={now} onAdd={addDebt} onDelete={removeDebt} /></div>
+            <div className="mt-8"><PeopleView debts={debts} now={now} onAdd={addDebt} onDelete={removeDebt} upiId={settings.upiId} onUpi={async v => { await updateSettings({ upiId: v }); say(t.people.upiSaved); }} /></div>
           </>
         )}
         {tab === "settings" && (
           <SettingsView rows={rows} learned={learned} debts={debts} settings={settings} persisted={persisted}
             extra={{ accounts, transfers, holdings, goals, plan }} onImport={importRows} onPayments={() => go("payments")}
-            onSettings={updateSettings} say={x => say(x)}
+            onSettings={async s => { if (s.lock) setUnlocked(true); await updateSettings(s); }} say={x => say(x)}
             onRestore={async p => {
               const b = p.backup;
               await applyRestore([...p.add, ...p.update], b.learned, [], b.debts, {
@@ -485,6 +498,15 @@ export function App() {
         )}
         <EditSheet expense={editing} planName={editing ? planItemOf(editing)?.name ?? null : null} now={now} onClose={() => setEditing(null)} onSave={save} onDelete={e => remove(e)} onSkip={skipThisMonth} accounts={accounts} onPhoto={setPhoto} />
       </>
+    );
+  }
+
+  if (loaded && settings.lock && !unlocked) {
+    return (
+      <I18nContext.Provider value={i18n}>
+        <LockScreen lock={settings.lock} onSave={l => updateSettings({ lock: l })} onUnlock={() => setUnlocked(true)}
+          onErase={async () => { await eraseAll(); location.replace("/"); }} />
+      </I18nContext.Provider>
     );
   }
 
