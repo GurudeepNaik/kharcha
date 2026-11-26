@@ -44,6 +44,9 @@ export function readDate(s: string): string | null {
   if (m) return validDate(m[3]!.length === 2 ? 2000 + Number(m[3]) : Number(m[3]), Number(m[2]), Number(m[1]));
   m = /^(\d{1,2})[\s/.-]([a-z]{3})[a-z]*[\s/.,-]+(\d{2}|\d{4})$/.exec(t);
   if (m && MON.includes(m[2]!)) return validDate(m[3]!.length === 2 ? 2000 + Number(m[3]) : Number(m[3]), MON.indexOf(m[2]!) + 1, Number(m[1]));
+  // Month first, as PhonePe and Google Pay write it: "Nov 26, 2026".
+  m = /^([a-z]{3})[a-z]*[\s.-]+(\d{1,2})(?:st|nd|rd|th)?[\s,.-]+(\d{2}|\d{4})$/.exec(t);
+  if (m && MON.includes(m[1]!)) return validDate(m[3]!.length === 2 ? 2000 + Number(m[3]) : Number(m[3]), MON.indexOf(m[1]!) + 1, Number(m[2]));
   return null;
 }
 
@@ -95,7 +98,9 @@ export function readStatement(text: string): StatementResult {
   const debit = pick(h, /withdrawal|debit|\bdr\b|paid out/, /credit|\/|type/);
   const credit = pick(h, /deposit|credit|\bcr\b|paid in/, /debit|\/|type/);
   const amount = pick(h, /^(transaction )?amount|^amt/);
-  const type = pick(h, /dr ?\/ ?cr|cr ?\/ ?dr|^type$|debit ?\/ ?credit|^dr\/cr/);
+  const type = pick(h, /dr ?\/ ?cr|cr ?\/ ?dr|^(transaction |txn |tran )?type$|debit ?\/ ?credit|^dr\/cr/);
+  // A UTR (UPI reference) column means a UPI app export such as PhonePe: every row is UPI.
+  const allUpi = h.some(c => c === "utr" || /^utr (no|number)/.test(c));
 
   const rows: StatementRow[] = [];
   let skipped = 0;
@@ -119,20 +124,23 @@ export function readStatement(text: string): StatementResult {
     }
     if (!paise || !dir) { skipped++; continue; }
     const narration = (note >= 0 ? r[note] : "")?.replace(/\s+/g, " ").trim() ?? "";
-    rows.push({ date: d, amountPaise: paise, dir, narration, note: noteFromNarration(narration), method: /\bupi\b/i.test(narration) ? "upi" : /\b(atm|nwd)\b/i.test(narration) ? "cash" : null });
+    rows.push({ date: d, amountPaise: paise, dir, narration, note: noteFromNarration(narration), method: allUpi || /\bupi\b/i.test(narration) ? "upi" : /\b(atm|nwd)\b/i.test(narration) ? "cash" : null });
   }
   if (!rows.length) return { ok: false, code: "noRows" };
   return { ok: true, rows, skipped };
 }
 
-export type Skip = "duplicate" | "atm" | "card" | null;
+export type Skip = "duplicate" | "atm" | "card" | "self" | null;
 /** Paying a credit-card bill moves money between your own accounts; the card spends were (or will be) noted one by one. */
+/** Moving money between your own accounts: "Transfer to XX9019" (a masked account number, as PhonePe writes it), "self transfer", "own account". */
+const SELF_TRANSFER = /^(self )?transfer (to|from) [x\d]{4,}$|\bself[ -]?(transfer|trf|a\/?c)\b|\bown (account|a\/?c)\b/i;
 const CARD_BILL = /credit ?card|card ?bill|cc ?(pay|bill)|\b(hdfc|icici|sbi|axis|kotak|amex|rbl|indus|yes|idfc|au|hsbc|sc)cc\b|cred club|billdesk.*card/i;
 export interface ImportItem { row: StatementRow; category: Category; include: boolean; reason: Skip }
 
 /**
  * What each statement row becomes, and whether it's ticked. Left unticked: rows that look already noted
- * (same amount, same direction, within a day), ATM withdrawals (cash, not spending) and credit-card bill payments.
+ * (same amount, same direction, within a day), ATM withdrawals (cash, not spending), credit-card bill payments
+ * and transfers between your own accounts.
  */
 export function planImport(rows: StatementRow[], existing: Expense[], learned: ReadonlyMap<string, Category>): ImportItem[] {
   const used = new Set<string>();
@@ -146,6 +154,7 @@ export function planImport(rows: StatementRow[], existing: Expense[], learned: R
     if (dup) { used.add(dup.id); reason = "duplicate"; }
     else if (row.note === "ATM cash") reason = "atm";
     else if (row.dir === "out" && CARD_BILL.test(row.narration)) reason = "card";
+    else if (SELF_TRANSFER.test(row.narration)) reason = "self";
     return { row, category, include: reason === null, reason };
   });
 }
