@@ -63,6 +63,7 @@ export function App() {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [toast, setToast] = useState<ToastMsg | null>(null);
   const [typing, setTyping] = useState(false);
+  const quietFocus = useRef(false);
   const toastId = useRef(0);
   const addBox = useRef<AddBoxHandle>(null);
   const pending = useRef<{ fill?: string; focus?: boolean; inbox?: boolean; lost?: boolean } | null>(null);
@@ -112,10 +113,15 @@ export function App() {
     document.addEventListener("visibilitychange", onVis);
     addEventListener("hashchange", onHash);
     const isField = (x: EventTarget | null) => x instanceof HTMLElement && x.matches("input:not([type=radio]):not([type=checkbox]):not([type=file]):not([type=date]), textarea");
-    const fin = (e: FocusEvent) => { if (isField(e.target)) setTyping(true); };
+    // The bottom bar makes way for the keyboard while typing. The add box being ready on open isn't typing yet:
+    // that focus is quiet, and the bar goes only once the person taps a field or types.
+    const fin = (e: FocusEvent) => { if (!isField(e.target)) return; if (quietFocus.current) { quietFocus.current = false; return; } setTyping(true); };
     const fout = (e: FocusEvent) => { if (isField(e.target)) setTyping(false); };
+    const use = (e: Event) => { if (isField(e.target)) setTyping(true); };
     document.addEventListener("focusin", fin);
     document.addEventListener("focusout", fout);
+    document.addEventListener("pointerdown", use);
+    document.addEventListener("input", use);
     // iPhone doesn't shrink the page for the keyboard: measure it so the add box can sit on top of it.
     const vv = window.visualViewport;
     const onVV = () => { if (vv) document.documentElement.style.setProperty("--kb", `${Math.max(0, innerHeight - vv.height - vv.offsetTop)}px`); };
@@ -127,6 +133,8 @@ export function App() {
       removeEventListener("hashchange", onHash);
       document.removeEventListener("focusin", fin);
       document.removeEventListener("focusout", fout);
+      document.removeEventListener("pointerdown", use);
+      document.removeEventListener("input", use);
       vv?.removeEventListener("resize", onVV);
       vv?.removeEventListener("scroll", onVV);
     };
@@ -148,7 +156,12 @@ export function App() {
   // puts the cursor in the add box on Home (not while an entry is open for editing).
   const ready = loaded && (!settings.lock || unlocked);
   const focusAdd = useRef<() => void>(() => {});
-  focusAdd.current = () => { if (ready && tab === "home" && !editing) addBox.current?.focus(); };
+  focusAdd.current = () => {
+    if (!ready || tab !== "home" || editing || document.activeElement?.id === "entry") return;
+    quietFocus.current = true;
+    addBox.current?.focus();
+    quietFocus.current = false;
+  };
   useEffect(() => {
     if (ready && !pending.current) setTimeout(() => focusAdd.current(), 0);
   }, [ready]);
