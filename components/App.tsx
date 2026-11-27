@@ -144,6 +144,24 @@ export function App() {
     document.addEventListener("visibilitychange", v);
     return () => document.removeEventListener("visibilitychange", v);
   }, []);
+  // Adding a spend should take no taps: opening the app, unlocking it, or coming back to it after a while
+  // puts the cursor in the add box on Home (not while an entry is open for editing).
+  const ready = loaded && (!settings.lock || unlocked);
+  const focusAdd = useRef<() => void>(() => {});
+  focusAdd.current = () => { if (ready && tab === "home" && !editing) addBox.current?.focus(); };
+  useEffect(() => {
+    if (ready && !pending.current) setTimeout(() => focusAdd.current(), 0);
+  }, [ready]);
+  useEffect(() => {
+    let away = 0;
+    const v = () => {
+      if (document.hidden) { away = Date.now(); return; }
+      if (away && Date.now() - away > 30_000) setTimeout(() => focusAdd.current(), 0);
+    };
+    document.addEventListener("visibilitychange", v);
+    return () => document.removeEventListener("visibilitychange", v);
+  }, []);
+
   // Shared text / shortcut: once the add box exists, fill or focus it.
   useEffect(() => {
     if (!loaded || !pending.current) return;
