@@ -1,18 +1,19 @@
 "use client";
 
 // Settings → Import bank statement: pick a CSV, check what will be added, import.
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { CATEGORIES, kindOf, type Category } from "@/lib/categories";
 import { dateText, useI18n } from "@/lib/i18n";
 import { rupees } from "@/lib/money";
-import { planImport, readStatement, type ImportItem } from "@/lib/statement";
+import { pastImports, planImport, readStatement, type ImportItem } from "@/lib/statement";
 import type { Expense } from "@/lib/types";
 import type { Account } from "@/lib/wealth";
 import { Sheet, SheetHead, btnLine, btnPrimary, card } from "./ui";
 
-export function ImportCard({ rows, learned, accounts, onImport }: {
+export function ImportCard({ rows, learned, accounts, onImport, onRemoveImport }: {
   rows: Expense[]; learned: ReadonlyMap<string, Category>; accounts: Account[];
   onImport: (items: ImportItem[], accountId: string | null) => Promise<void>;
+  onRemoveImport: (ids: string[]) => Promise<void>;
 }) {
   const i = useI18n();
   const { t } = i;
@@ -21,6 +22,7 @@ export function ImportCard({ rows, learned, accounts, onImport }: {
   const [error, setError] = useState<string | null>(null);
   const [plan, setPlan] = useState<{ items: ImportItem[]; skipped: number } | null>(null);
   const [account, setAccount] = useState<string>("");
+  const past = useMemo(() => pastImports(rows), [rows]);
 
   async function pick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -49,6 +51,25 @@ export function ImportCard({ rows, learned, accounts, onImport }: {
       <button type="button" onClick={() => input.current?.click()} className={`${btnLine} mt-3`}>{m.pick}</button>
       <input ref={input} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain,text/tab-separated-values" onChange={e => void pick(e)} className="hidden" aria-hidden tabIndex={-1} data-testid="statement-input" />
       {error && <p role="alert" className="mt-2 text-sm font-medium text-bad" data-testid="import-error">{error}</p>}
+      {past.length > 0 && (
+        <div className="mt-4" data-testid="past-imports">
+          <h3 className="text-sm font-semibold">{m.past}</h3>
+          <ul className="mt-1 divide-y divide-line">
+            {past.map(p => {
+              const at = new Date(p.at);
+              return (
+                <li key={p.at} className="flex items-center justify-between gap-3 py-2">
+                  <span className="min-w-0 text-[14px]">
+                    <span className="block font-medium">{at.toLocaleString(i.locale, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</span>
+                    <span className="block text-[13px] text-muted">{m.pastLine(p.ids.length, dateText(p.from, i), dateText(p.to, i))} · {rupees(p.outPaise)}</span>
+                  </span>
+                  <button type="button" onClick={() => void onRemoveImport(p.ids)} className="press min-h-11 shrink-0 rounded-lg px-3 text-[14px] font-medium text-bad" data-testid="past-import-remove">{m.remove}</button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       <Sheet open={!!plan} onClose={() => setPlan(null)} label={m.title}>
         {plan && (

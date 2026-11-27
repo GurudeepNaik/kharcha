@@ -422,6 +422,24 @@ export function App() {
     });
   }
 
+  /** Settings → Past imports → Remove: takes out every entry one import added (Undo puts them back). */
+  async function removeImport(ids: string[]) {
+    const set = new Set(ids);
+    const gone = (rows ?? []).filter(e => set.has(e.id));
+    const photos = new Map<string, Blob>();
+    for (const e of gone) {
+      if (e.photo) { const ph = await getPhoto(e.id); if (ph) photos.set(e.id, ph); }
+      await deleteExpense(e.id);
+      if (e.photo) await deletePhoto(e.id);
+    }
+    setRows(r => (r ?? []).filter(x => !set.has(x.id)));
+    say(t.importer.removed(gone.length), async () => {
+      await applyRestore(gone, []);
+      for (const [id, ph] of photos) await putPhoto(id, ph);
+      setRows(r => sortRows([...gone, ...(r ?? []).filter(x => !set.has(x.id))]));
+    });
+  }
+
   async function updateSettings(s: Partial<Settings>) {
     await saveSettings(s);
     setSettings(cur => ({ ...cur, ...s }));
@@ -475,7 +493,7 @@ export function App() {
         )}
         {tab === "settings" && (
           <SettingsView rows={rows} learned={learned} debts={debts} settings={settings} persisted={persisted}
-            extra={{ accounts, transfers, holdings, goals, plan }} onImport={importRows} onPayments={() => go("payments")}
+            extra={{ accounts, transfers, holdings, goals, plan }} onImport={importRows} onRemoveImport={removeImport} onPayments={() => go("payments")}
             onSettings={async s => { if (s.lock) setUnlocked(true); await updateSettings(s); }} say={x => say(x)}
             onRestore={async p => {
               const b = p.backup;

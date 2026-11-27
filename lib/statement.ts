@@ -158,3 +158,23 @@ export function planImport(rows: StatementRow[], existing: Expense[], learned: R
     return { row, category, include: reason === null, reason };
   });
 }
+
+export interface PastImport { at: string; ids: string[]; outPaise: number; inPaise: number; from: string; to: string }
+/**
+ * Statement imports so far, newest first. One import stamps every entry it adds with the same createdAt, which nothing
+ * typed by hand does. Entries Payments adds (ids "p-…") and old monthly repeats are also made in batches, so they're left out.
+ */
+export function pastImports(rows: Expense[]): PastImport[] {
+  const by = new Map<string, Expense[]>();
+  for (const e of rows) {
+    if (e.id.startsWith("p-") || e.repeatId) continue;
+    const g = by.get(e.createdAt);
+    if (g) g.push(e); else by.set(e.createdAt, [e]);
+  }
+  return [...by].filter(([, g]) => g.length >= 2).map(([at, g]) => {
+    const dates = g.map(e => e.date).sort();
+    let outPaise = 0, inPaise = 0;
+    for (const e of g) if (isIncomeCategory(e.category)) inPaise += e.amountPaise; else outPaise += e.amountPaise;
+    return { at, ids: g.map(e => e.id), outPaise, inPaise, from: dates[0]!, to: dates.at(-1)! };
+  }).sort((a, b) => (a.at < b.at ? 1 : -1));
+}

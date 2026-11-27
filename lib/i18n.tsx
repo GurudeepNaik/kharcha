@@ -194,6 +194,7 @@ const en = {
     go: (n: number) => (n === 1 ? "Import 1 entry" : `Import ${n} entries`), all: "Tick all", clear: "Untick all",
     done: (n: number) => (n === 1 ? "Imported 1 entry" : `Imported ${n} entries`),
     noHeader: "Couldn't find the date and amount columns. Is this a bank statement saved as CSV?", noRows: "No transactions found in this file.", tooBig: "This file is too big.",
+    past: "Past imports", pastLine: (n: number, from: string, to: string) => `${n} entries, ${from} to ${to}`, remove: "Remove", removed: (n: number) => `Removed ${n} imported entries`,
   },
   photo: { add: "Add receipt photo", view: "View photo", remove: "Remove photo", keep: "Keep the receipt photo with this entry", include: "Include receipt photos (bigger file)", alt: "Receipt photo" },
   notes: {
@@ -439,6 +440,7 @@ const hi: Msg = {
     go: n => `${n} एंट्री लाएँ`, all: "सब चुनें", clear: "सब हटाएँ",
     done: n => `${n} एंट्री लाई गईं`,
     noHeader: "तारीख और रकम के कॉलम नहीं मिले। क्या यह CSV में सेव किया बैंक स्टेटमेंट है?", noRows: "इस फ़ाइल में कोई लेन-देन नहीं मिला।", tooBig: "यह फ़ाइल बहुत बड़ी है।",
+    past: "पहले के इम्पोर्ट", pastLine: (n: number, from: string, to: string) => `${n} एंट्री, ${from} से ${to}`, remove: "हटाएँ", removed: (n: number) => `${n} इम्पोर्ट की गई एंट्री हटाई गईं`,
   },
   photo: { add: "रसीद की फ़ोटो जोड़ें", view: "फ़ोटो देखें", remove: "फ़ोटो हटाएँ", keep: "रसीद की फ़ोटो इस एंट्री के साथ रखें", include: "रसीद की फ़ोटो भी शामिल करें (फ़ाइल बड़ी होगी)", alt: "रसीद की फ़ोटो" },
   notes: {
@@ -682,6 +684,7 @@ const kn: Msg = {
     go: n => `${n} ನಮೂದುಗಳನ್ನು ತನ್ನಿ`, all: "ಎಲ್ಲಾ ಆಯ್ಕೆ", clear: "ಎಲ್ಲಾ ತೆಗೆ",
     done: n => `${n} ನಮೂದುಗಳನ್ನು ತರಲಾಗಿದೆ`,
     noHeader: "ದಿನಾಂಕ ಮತ್ತು ಮೊತ್ತದ ಕಾಲಮ್‌ಗಳು ಸಿಗಲಿಲ್ಲ. ಇದು CSV ಆಗಿ ಉಳಿಸಿದ ಬ್ಯಾಂಕ್ ಸ್ಟೇಟ್‌ಮೆಂಟ್ ಆಗಿದೆಯೇ?", noRows: "ಈ ಫೈಲ್‌ನಲ್ಲಿ ಯಾವುದೇ ವಹಿವಾಟು ಸಿಗಲಿಲ್ಲ.", tooBig: "ಈ ಫೈಲ್ ತುಂಬಾ ದೊಡ್ಡದು.",
+    past: "ಹಿಂದಿನ ಆಮದುಗಳು", pastLine: (n: number, from: string, to: string) => `${n} ನಮೂದುಗಳು, ${from} ರಿಂದ ${to}`, remove: "ತೆಗೆದುಹಾಕಿ", removed: (n: number) => `${n} ಆಮದು ಮಾಡಿದ ನಮೂದುಗಳನ್ನು ತೆಗೆದುಹಾಕಲಾಗಿದೆ`,
   },
   photo: { add: "ರಸೀದಿ ಫೋಟೋ ಸೇರಿಸಿ", view: "ಫೋಟೋ ನೋಡಿ", remove: "ಫೋಟೋ ತೆಗೆಯಿರಿ", keep: "ರಸೀದಿ ಫೋಟೋವನ್ನು ಈ ನಮೂದಿನ ಜೊತೆ ಇಡಿ", include: "ರಸೀದಿ ಫೋಟೋಗಳನ್ನೂ ಸೇರಿಸಿ (ಫೈಲ್ ದೊಡ್ಡದಾಗುತ್ತದೆ)", alt: "ರಸೀದಿ ಫೋಟೋ" },
   notes: {

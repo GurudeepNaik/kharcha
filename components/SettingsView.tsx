@@ -30,12 +30,13 @@ function download(name: string, blob: Blob) {
 
 const SPEND_CATS = CATEGORIES.filter(c => c.kind === "spend").map(c => c.key as SpendCategory);
 
-export function SettingsView({ rows, learned, debts, settings, persisted, extra, onImport, onPayments, onSettings, onRestore, say }: {
+export function SettingsView({ rows, learned, debts, settings, persisted, extra, onImport, onRemoveImport, onPayments, onSettings, onRestore, say }: {
   rows: Expense[];
   learned: Map<string, Category>;
   debts: Debt[];
   extra: Required<Omit<BackupExtra, "photos">>;
   onImport: (items: ImportItem[], accountId: string | null) => Promise<void>;
+  onRemoveImport: (ids: string[]) => Promise<void>;
   settings: Settings;
   persisted: boolean;
   onSettings: (s: Partial<Settings>) => Promise<void>;
@@ -197,7 +198,7 @@ export function SettingsView({ rows, learned, debts, settings, persisted, extra,
 
       <LockCard lock={settings.lock} onSettings={onSettings} say={say} />
 
-      <ImportCard rows={rows} learned={learned} accounts={extra.accounts} onImport={onImport} />
+      <ImportCard rows={rows} learned={learned} accounts={extra.accounts} onImport={onImport} onRemoveImport={onRemoveImport} />
 
       <div className={`${card} p-4`}>
         <h2 className="font-semibold">{t.settings.backup}</h2>
