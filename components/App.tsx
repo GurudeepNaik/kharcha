@@ -117,14 +117,23 @@ export function App() {
     // that focus is quiet, and the bar goes only once the person taps a field or types.
     const fin = (e: FocusEvent) => { if (!isField(e.target)) return; if (quietFocus.current) { quietFocus.current = false; return; } setTyping(true); };
     const fout = (e: FocusEvent) => { if (isField(e.target)) setTyping(false); };
-    const use = (e: Event) => { if (isField(e.target)) setTyping(true); };
+    // A tap (click, which a swipe never fires) on the field that already has focus, or typing into it.
+    const use = (e: Event) => { if (isField(e.target) && e.target === document.activeElement) setTyping(true); };
     document.addEventListener("focusin", fin);
     document.addEventListener("focusout", fout);
-    document.addEventListener("pointerdown", use);
+    document.addEventListener("click", use);
     document.addEventListener("input", use);
     // iPhone doesn't shrink the page for the keyboard: measure it so the add box can sit on top of it.
+    // When a keyboard that was up goes away (Android back button) the field keeps focus: let it go so the bar returns.
     const vv = window.visualViewport;
-    const onVV = () => { if (vv) document.documentElement.style.setProperty("--kb", `${Math.max(0, innerHeight - vv.height - vv.offsetTop)}px`); };
+    let kbUp = false;
+    const onVV = () => {
+      if (!vv) return;
+      const kb = Math.max(0, innerHeight - vv.height - vv.offsetTop);
+      document.documentElement.style.setProperty("--kb", `${kb}px`);
+      if (kb > 150) kbUp = true;
+      else if (kbUp && kb < 50) { kbUp = false; if (isField(document.activeElement)) (document.activeElement as HTMLElement).blur(); }
+    };
     vv?.addEventListener("resize", onVV);
     vv?.addEventListener("scroll", onVV);
     return () => {
@@ -133,7 +142,7 @@ export function App() {
       removeEventListener("hashchange", onHash);
       document.removeEventListener("focusin", fin);
       document.removeEventListener("focusout", fout);
-      document.removeEventListener("pointerdown", use);
+      document.removeEventListener("click", use);
       document.removeEventListener("input", use);
       vv?.removeEventListener("resize", onVV);
       vv?.removeEventListener("scroll", onVV);
