@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.gurudeepnaik.kharcha",
+    "sha256_cert_fingerprints": ["C6:ED:27:58:8C:BE:0F:D8:15:ED:87:83:4D:96:E4:75:0B:0C:7C:74:9A:D4:F2:30:5C:D5:47:9C:AB:DF:2B:84"]
+  }
+}]
