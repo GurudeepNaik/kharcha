@@ -51,7 +51,7 @@ assert.deepEqual(ST.readAmount("₹ 1,234.50 Dr"), { paise: 123450, dir: "out" }
     ["ATM cash", "other", false, "atm"],
     ["Billpay", "bills", false, "card"],              // "HDFCCC": an HDFC credit-card bill payment
     ["Asha Stores", "refund", true, null],
-    ["Big Bazaar", "other", false, "duplicate"],
+    ["Big Bazaar", "groceries", false, "duplicate"],
   ]);
   const cc = ST.planImport([{ date: "2026-11-07", amountPaise: 1234000, dir: "out", narration: "CREDIT CARD PAYMENT HDFC", note: "Hdfc", method: null }], [], new Map());
   assert.equal(cc[0]!.reason, "card");

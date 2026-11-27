@@ -68,18 +68,20 @@ const INVEST_WORDS: Record<InvestCategory, string[]> = {
 const WORDS: Record<Exclude<SpendCategory, "other">, string[]> = {
   food: ["चाय", "खाना", "नाश्ता", "होटल", "ಚಹಾ", "ಕಾಫಿ", "ಊಟ", "ತಿಂಡಿ", "ಹೋಟೆಲ್", "chai", "tea", "coffee", "lunch", "dinner", "breakfast", "snack", "snacks", "hotel", "restaurant", "cafe", "canteen", "mess", "tiffin",
     "swiggy", "zomato", "idli", "dosa", "vada", "biryani", "meals", "meal", "thali", "pizza", "burger", "juice", "icecream", "sweets", "bakery",
-    "parcel", "food", "khana", "nashta", "pani puri", "chaat", "samosa", "paratha", "dhaba"],
+    "parcel", "food", "restaurent", "restro", "resto", "darshini", "khana", "nashta", "pani puri", "chaat", "samosa", "paratha", "dhaba"],
   groceries: ["दूध", "सब्ज़ी", "सब्जी", "राशन", "किराना", "ಹಾಲು", "ತರಕಾರಿ", "ದಿನಸಿ", "ಅಕ್ಕಿ", "milk", "vegetables", "veggies", "veg", "sabzi", "sabji", "fruits", "fruit", "kirana", "grocery", "groceries", "dmart", "bigbasket",
-    "blinkit", "zepto", "instamart", "rice", "atta", "dal", "oil", "eggs", "egg", "bread", "curd", "doodh", "ration", "provisions", "chicken", "mutton", "fish", "meat"],
+    "blinkit", "zepto", "instamart", "rice", "atta", "dal", "oil", "eggs", "egg", "bread", "curd", "doodh", "ration", "provisions", "chicken", "mutton", "fish", "meat",
+    // Shop names in UPI statements: "Mukund Store", "Ganesh General Stores", "Bhatkal Medical Stor" stays Health (medical comes first).
+    "store", "stores", "general store", "general stores", "mart", "supermarket", "super market", "provision", "kirana store", "departmental", "bazaar", "bazar"],
   travel: ["ऑटो", "बस", "पेट्रोल", "टैक्सी", "ಆಟೋ", "ಬಸ್", "ಪೆಟ್ರೋಲ್", "auto", "bus", "metro", "uber", "ola", "rapido", "cab", "taxi", "petrol", "diesel", "fuel", "cng", "train", "flight", "toll", "parking",
-    "fastag", "ticket", "travel", "bike", "service", "redbus", "irctc"],
+    "fastag", "ticket", "travel", "bike", "cycle", "service", "redbus", "irctc"],
   bills: ["बिजली", "बिल", "रिचार्ज", "ಕರೆಂಟ್", "ವಿದ್ಯುತ್", "ಬಿಲ್", "ರೀಚಾರ್ಜ್", "electricity", "current", "bescom", "light", "recharge", "mobile", "phone", "wifi", "internet", "broadband", "gas", "cylinder", "water",
-    "dth", "netflix", "hotstar", "prime", "spotify", "jio", "airtel", "vi", "bsnl", "bill", "bills", "fees", "fee", "school", "tuition"],
+    "dth", "play store", "app store", "google play", "netflix", "hotstar", "prime", "spotify", "jio", "airtel", "vi", "bsnl", "bill", "bills", "fees", "fee", "school", "tuition"],
   shopping: ["कपड़े", "ಬಟ್ಟೆ", "amazon", "flipkart", "myntra", "meesho", "ajio", "clothes", "shirt", "saree", "kurta", "dress", "shoes", "chappal", "slippers",
     "shopping", "gift", "watch", "bag", "cosmetics", "salon", "haircut"],
   health: ["दवा", "दवाई", "डॉक्टर", "ಔಷಧಿ", "ಮಾತ್ರೆ", "ಡಾಕ್ಟರ್", "medicine", "medicines", "medical", "tablet", "tablets", "doctor", "hospital", "clinic", "pharmacy", "chemist", "test", "lab", "dental",
     "dentist", "gym", "yoga", "health", "dawai", "checkup"],
-  rent: ["किराया", "ಬಾಡಿಗೆ", "rent", "maintenance", "emi", "loan", "pg", "hostel", "deposit"],
+  rent: ["किराया", "ಬಾಡಿಗೆ", "rent", "maintenance", "emi", "loan", "avanse", "bajaj finance", "finance", "financial", "pg", "hostel", "deposit"],
 };
 
 const INCOME = new Map<string, Category>();

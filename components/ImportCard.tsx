@@ -34,6 +34,12 @@ export function ImportCard({ rows, learned, accounts, onImport }: {
     setAccount(accounts.find(a => a.type === "bank")?.id ?? "");
   }
   const set = (idx: number, p: Partial<ImportItem>) => setPlan(pl => pl && { ...pl, items: pl.items.map((x, j) => (j === idx ? { ...x, ...p } : x)) });
+  // A new category for one row applies to every row from the same payee going the same way (Mukund Store ×6 is one tap).
+  const setCategory = (idx: number, category: Category) => setPlan(pl => {
+    if (!pl) return pl;
+    const { note, dir } = pl.items[idx]!.row;
+    return { ...pl, items: pl.items.map((x, j) => (j === idx || (note && x.row.note === note && x.row.dir === dir) ? { ...x, category } : x)) };
+  });
   const chosen = plan?.items.filter(x => x.include).length ?? 0;
 
   return (
@@ -74,7 +80,7 @@ export function ImportCard({ rows, learned, accounts, onImport }: {
                       </span>
                       <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[13px] text-muted">
                         <span>{dateText(x.row.date, i)}</span>
-                        <select aria-label={t.add.category} value={x.category} onChange={e => set(idx, { category: e.target.value as Category })} className="rounded-md border border-line bg-card px-1 py-0.5 text-[13px] text-fg">
+                        <select aria-label={t.add.category} value={x.category} onChange={e => setCategory(idx, e.target.value as Category)} className="rounded-md border border-line bg-card px-1 py-0.5 text-[13px] text-fg">
                           {CATEGORIES.filter(c => (inc ? kindOf(c.key) === "in" : kindOf(c.key) !== "in")).map(c => <option key={c.key} value={c.key}>{t.cat[c.key]}</option>)}
                         </select>
                         {x.reason && <span className="font-medium text-warn">{m[x.reason]}</span>}
