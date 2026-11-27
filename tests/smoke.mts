@@ -770,7 +770,7 @@ ok("a damaged file is refused", (await text(fresh, "[role=alert]")).includes("da
 
 // ---------- App lock ----------
 {
-  const p = await phone();
+  let p = await phone();
   await add(p, "chai 20");
   await clickText(p, "Settings", "nav button"); await p.waitForSelector("[data-testid=lock-set]");
   await tap(p, "[data-testid=lock-set]");
@@ -781,7 +781,21 @@ ok("a damaged file is refused", (await text(fresh, "[role=alert]")).includes("da
   ok("lock turned on without locking you out right away", !(await p.$("[data-testid=lock]")));
   const stored = await p.evaluate(() => new Promise<string>(res => { const r = indexedDB.open("expenses"); r.onsuccess = () => { const q = r.result.transaction("settings").objectStore("settings").get("lock"); q.onsuccess = () => { res(JSON.stringify(q.result)); r.result.close(); }; }; }));
   ok("the PIN itself isn't stored", !stored.includes("2468") && stored.includes("hash"));
-  await p.reload({ waitUntil: "networkidle2" }); await p.waitForSelector("[data-testid=lock]");
+  await p.reload({ waitUntil: "networkidle2" }); await p.waitForSelector("nav");
+  ok("a refresh within a minute stays open", !(await p.$("[data-testid=lock]")));
+  // Refreshing after more than a minute: the page was last in use 61 s ago.
+  // The next page load runs 61 s in the future.
+  await p.evaluateOnNewDocument("if (!sessionStorage.getItem('skewed')) { sessionStorage.setItem('skewed', '1'); const r = Date.now; Date.now = () => r() + 61000; }");
+  await p.reload({ waitUntil: "networkidle2" }).catch(() => undefined);
+  await p.waitForSelector("[data-testid=lock], nav");
+  ok("a refresh after more than a minute locks", !!(await p.$("[data-testid=lock]")));
+  // Reopening the app (new tab: nothing in sessionStorage).
+  { // A new tab in the same browser: same data, empty sessionStorage.
+    const ctx = p.browserContext(); await p.close(); p = await ctx.newPage();
+    await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+    await p.evaluateOnNewDocument("globalThis.__name = f => f");
+    await p.goto(BASE, { waitUntil: "networkidle2" }); }
+  await p.waitForSelector("[data-testid=lock]");
   ok("reopening shows the lock screen and no data", !(await p.$("#entry")) && !(await p.$("nav")));
   for (const k of "1111") await p.click(`[data-key="${k}"]`);
   await p.waitForFunction(() => document.querySelector("[data-testid=lock-msg]")?.textContent === "Wrong PIN", { timeout: 5000 }).catch(() => undefined);

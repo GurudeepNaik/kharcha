@@ -40,6 +40,9 @@ import { ThemeToggle } from "./ThemeToggle";
 import { WealthView, type ListName } from "./WealthView";
 import { Icon, Svg, Toast, card, type ToastMsg } from "./ui";
 
+/** When the unlocked app was last in use in this tab, so a refresh within a minute stays unlocked. */
+const LOCK_SEEN = "lock-seen";
+
 type Tab = "home" | "payments" | "month" | "wealth" | "settings";
 const TABS: Tab[] = ["home", "payments", "month", "wealth", "settings"];
 const tabFromHash = (): Tab => { const h = location.hash.slice(1); return (TABS as string[]).includes(h) ? (h as Tab) : "home"; };
@@ -150,16 +153,26 @@ export function App() {
   }, []);
 
   const loaded = rows !== null;
-  // App lock: locked on open, and again after a minute away.
-  const [unlocked, setUnlocked] = useState(false);
+  // App lock: locked on open, and again after a minute away. A refresh isn't "away": the time the page was last
+  // in use is kept in sessionStorage (this tab only, gone when the tab or app is closed), and a reload within a
+  // minute of it stays unlocked.
+  const [unlocked, setUnlocked] = useState(() => {
+    try { const at = Number(sessionStorage.getItem(LOCK_SEEN)); return at > 0 && at <= Date.now() && Date.now() - at < RELOCK_MS; } catch { return false; }
+  });
+  const unlockedNow = useRef(unlocked);
+  useEffect(() => { unlockedNow.current = unlocked; if (!unlocked) try { sessionStorage.removeItem(LOCK_SEEN); } catch { /* private mode */ } }, [unlocked]);
   const hiddenAt = useRef<number | null>(null);
   useEffect(() => {
+    const seen = () => { if (unlockedNow.current) try { sessionStorage.setItem(LOCK_SEEN, String(Date.now())); } catch { /* private mode */ } };
     const v = () => {
-      if (document.hidden) hiddenAt.current = Date.now();
+      if (document.hidden) { hiddenAt.current = Date.now(); seen(); }
       else if (hiddenAt.current && Date.now() - hiddenAt.current > RELOCK_MS) setUnlocked(false);
     };
+    // Leaving while on screen is a refresh; leaving while hidden keeps the time it was hidden.
+    const leave = () => { if (!document.hidden) seen(); };
     document.addEventListener("visibilitychange", v);
-    return () => document.removeEventListener("visibilitychange", v);
+    addEventListener("pagehide", leave);
+    return () => { document.removeEventListener("visibilitychange", v); removeEventListener("pagehide", leave); };
   }, []);
   // Adding a spend should take no taps: opening the app, unlocking it, or coming back to it after a while
   // puts the cursor in the add box on Home (not while an entry is open for editing).
