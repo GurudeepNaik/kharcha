@@ -427,6 +427,7 @@ ok("a damaged file is refused", (await text(fresh, "[role=alert]")).includes("da
   await wait(400);
   ok("shortcut opens with the box ready to type", await p.evaluate(() => document.activeElement?.id === "entry"));
   const m = await p.evaluate(async () => (await fetch("/manifest.webmanifest")).json());
+  ok("camera allowed for Scan & pay (Permissions-Policy)", await p.evaluate(() => (document as unknown as { featurePolicy?: { allowsFeature: (f: string) => boolean } }).featurePolicy?.allowsFeature("camera") === true));
   ok("manifest: share target takes receipt images, and 4 shortcuts with Scan & pay first", m.share_target?.action === "/share-target" && m.share_target?.params?.files?.[0]?.accept?.includes("image/*") && m.shortcuts?.length === 4 && m.shortcuts[0].url === "/?scan=1");
   await p.close();
 }

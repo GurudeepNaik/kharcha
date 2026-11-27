@@ -31,7 +31,8 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "X-Frame-Options", value: "DENY" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          // Camera for this site only (Scan & pay reads shop QR codes); never for embedded pages. No mic or location.
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
           ...(prod ? [{ key: "Content-Security-Policy", value: csp }] : []),
         ],
       },
