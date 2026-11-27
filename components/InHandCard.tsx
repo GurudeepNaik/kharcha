@@ -1,7 +1,7 @@
 "use client";
 
 // Home: money in hand now (bank + cash), what came over from last month, and this month's in and out.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { addMonths } from "@/lib/dates";
 import type { Debt } from "@/lib/debts";
 import { monthText, useI18n } from "@/lib/i18n";
@@ -20,6 +20,10 @@ export function InHandCard({ value, rows, debts, accounts, transfers, now, onSet
   const [editing, setEditing] = useState(false);
   const [v, setV] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  // "Not now" folds the first-time question into one line, so Home's list isn't pushed down every day.
+  const [later, setLater] = useState(false);
+  useEffect(() => { try { setLater(localStorage.getItem("inhand-later") === "1"); } catch { /* fine */ } }, []);
+  const putOff = (on: boolean) => { setLater(on); try { if (on) localStorage.setItem("inhand-later", "1"); else localStorage.removeItem("inhand-later"); } catch { /* fine */ } };
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -40,11 +44,18 @@ export function InHandCard({ value, rows, debts, accounts, transfers, now, onSet
           aria-invalid={!!err || undefined} aria-describedby={err ? "inhand-err" : undefined} className="field num min-w-0 flex-1" />
         <button type="submit" className="press min-h-11 rounded-xl bg-accent px-4 font-semibold text-accent-fg" data-testid="inhand-save">{h.save}</button>
         {value && <button type="button" onClick={() => { setEditing(false); setErr(null); }} className="press min-h-11 rounded-xl border border-line px-3">{h.cancel}</button>}
+        {!value && <button type="button" onClick={() => { putOff(true); setErr(null); }} className="press min-h-11 rounded-xl px-2 text-[14px] font-medium text-muted" data-testid="inhand-later">{h.later}</button>}
       </div>
       {err && <p id="inhand-err" role="alert" className="mt-1 text-sm text-bad">{err}</p>}
     </form>
   );
 
+  if (!value && later) return (
+    <button type="button" onClick={() => putOff(false)} data-testid="inhand-open"
+      className={`press mt-3 flex min-h-12 w-full items-center justify-between gap-3 ${card} px-4 text-start text-[15px] font-medium`}>
+      {h.addLater}<span aria-hidden className="text-muted">›</span>
+    </button>
+  );
   if (!value) return <div className={`mt-3 ${card} p-4`} data-testid="inhand">{form(h.ask, h.askHelp)}</div>;
 
   const s = inHandState(value, rows, debts, accounts, transfers, now);

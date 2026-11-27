@@ -165,7 +165,7 @@ const en = {
   summary: { share: "Share this month as a picture", top: "Where it went", madeWith: "Made with Kharcha · gurudeep-expenses.vercel.app", saved: "Picture saved to your downloads", left: "Left over" },
   hand: {
     title: "In hand", help: "Bank and cash together. Every entry updates it, and what's left carries into next month.",
-    ask: "How much money do you have right now?", askHelp: "Add up your bank balance and cash. You only type this once.", label: "Money you have now (₹)", save: "Save",
+    ask: "How much money do you have right now?", askHelp: "Add up your bank balance and cash. You only type this once.", later: "Not now", addLater: "Add the money you have now", label: "Money you have now (₹)", save: "Save",
     fix: "Correct it", fixTitle: "What do you have right now?", cancel: "Cancel",
     brought: (m: string, x: number) => `From ${m}: ${x < 0 ? "−" : ""}${r(Math.abs(x))}`, cameIn: (x: number) => `+${r(x)} in`, wentOut: (x: number) => `−${r(x)} out`,
     started: "Started with", ended: "Ended with", nowLabel: "In hand now", saved: (x: number) => `In hand set to ${r(x)}`,
@@ -411,7 +411,7 @@ const hi: Msg = {
   summary: { share: "इस महीने को तस्वीर में शेयर करें", top: "पैसा कहाँ गया", madeWith: "Kharcha से बना · gurudeep-expenses.vercel.app", saved: "तस्वीर डाउनलोड में सेव हुई", left: "बचा हुआ" },
   hand: {
     title: "हाथ में", help: "बैंक और नकद मिलाकर। हर एंट्री से यह बदलता है, और बचा हुआ अगले महीने में जाता है।",
-    ask: "अभी आपके पास कितने पैसे हैं?", askHelp: "बैंक बैलेंस और नकद जोड़ें। यह सिर्फ एक बार लिखना है।", label: "अभी के पैसे (₹)", save: "सेव करें",
+    ask: "अभी आपके पास कितने पैसे हैं?", askHelp: "बैंक बैलेंस और नकद जोड़ें। यह सिर्फ एक बार लिखना है।", later: "अभी नहीं", addLater: "अभी आपके पास जितने पैसे हैं, वो जोड़ें", label: "अभी के पैसे (₹)", save: "सेव करें",
     fix: "ठीक करें", fixTitle: "अभी आपके पास कितना है?", cancel: "रद्द करें",
     brought: (m: string, x: number) => `${m} से: ${x < 0 ? "−" : ""}${r(Math.abs(x))}`, cameIn: (x: number) => `+${r(x)} आए`, wentOut: (x: number) => `−${r(x)} गए`,
     started: "शुरुआत में", ended: "आखिर में", nowLabel: "अभी हाथ में", saved: (x: number) => `हाथ में ${r(x)} सेट किया`,
@@ -655,7 +655,7 @@ const kn: Msg = {
   summary: { share: "ಈ ತಿಂಗಳನ್ನು ಚಿತ್ರವಾಗಿ ಹಂಚಿ", top: "ಹಣ ಎಲ್ಲಿ ಹೋಯಿತು", madeWith: "Kharcha ಬಳಸಿ ಮಾಡಿದ್ದು · gurudeep-expenses.vercel.app", saved: "ಚಿತ್ರ ಡೌನ್‌ಲೋಡ್‌ಗೆ ಉಳಿಸಲಾಗಿದೆ", left: "ಉಳಿದದ್ದು" },
   hand: {
     title: "ಕೈಯಲ್ಲಿ", help: "ಬ್ಯಾಂಕ್ ಮತ್ತು ನಗದು ಸೇರಿ. ಪ್ರತಿ ನಮೂದು ಇದನ್ನು ಬದಲಾಯಿಸುತ್ತದೆ, ಉಳಿದದ್ದು ಮುಂದಿನ ತಿಂಗಳಿಗೆ ಹೋಗುತ್ತದೆ.",
-    ask: "ಈಗ ನಿಮ್ಮ ಬಳಿ ಎಷ್ಟು ಹಣ ಇದೆ?", askHelp: "ಬ್ಯಾಂಕ್ ಬ್ಯಾಲೆನ್ಸ್ ಮತ್ತು ನಗದು ಸೇರಿಸಿ. ಇದನ್ನು ಒಮ್ಮೆ ಮಾತ್ರ ಬರೆಯಬೇಕು.", label: "ಈಗಿರುವ ಹಣ (₹)", save: "ಉಳಿಸಿ",
+    ask: "ಈಗ ನಿಮ್ಮ ಬಳಿ ಎಷ್ಟು ಹಣ ಇದೆ?", askHelp: "ಬ್ಯಾಂಕ್ ಬ್ಯಾಲೆನ್ಸ್ ಮತ್ತು ನಗದು ಸೇರಿಸಿ. ಇದನ್ನು ಒಮ್ಮೆ ಮಾತ್ರ ಬರೆಯಬೇಕು.", later: "ಈಗ ಬೇಡ", addLater: "ಈಗ ನಿಮ್ಮ ಬಳಿ ಇರುವ ಹಣ ಸೇರಿಸಿ", label: "ಈಗಿರುವ ಹಣ (₹)", save: "ಉಳಿಸಿ",
     fix: "ಸರಿಪಡಿಸಿ", fixTitle: "ಈಗ ನಿಮ್ಮ ಬಳಿ ಎಷ್ಟಿದೆ?", cancel: "ರದ್ದು",
     brought: (m: string, x: number) => `${m} ನಿಂದ: ${x < 0 ? "−" : ""}${r(Math.abs(x))}`, cameIn: (x: number) => `+${r(x)} ಬಂತು`, wentOut: (x: number) => `−${r(x)} ಹೋಯಿತು`,
     started: "ಆರಂಭದಲ್ಲಿ", ended: "ಕೊನೆಯಲ್ಲಿ", nowLabel: "ಈಗ ಕೈಯಲ್ಲಿ", saved: (x: number) => `ಕೈಯಲ್ಲಿ ${r(x)} ಹೊಂದಿಸಲಾಗಿದೆ`,

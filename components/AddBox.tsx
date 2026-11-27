@@ -1,7 +1,7 @@
 "use client";
 
 // The add box, docked at the bottom of Home within thumb reach: "chai 20", "salary 50000", "lent ravi 500".
-import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { CATEGORIES, isIncomeCategory, type Category } from "@/lib/categories";
 import { parseDebt, type Direction } from "@/lib/debts";
 import { useI18n } from "@/lib/i18n";
@@ -33,7 +33,6 @@ export const AddBox = forwardRef<AddBoxHandle, {
   const [monthly, setMonthly] = useState(false);
   const [account, setAccount] = useState<string | null | undefined>(undefined); // undefined: the default for UPI / cash
   const [tried, setTried] = useState(false);
-  const [saving, setSaving] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
   useImperativeHandle(ref, () => ({
@@ -52,19 +51,36 @@ export const AddBox = forwardRef<AddBoxHandle, {
   const split = sw && value && kindOf(value.category) === "spend" ? { ...sw, ...shares(value.amountPaise, sw.ways) } : null;
   const names = (ps: string[]) => (ps.length > 1 ? `${ps.slice(0, -1).join(", ")} ${t.split.and} ${ps[ps.length - 1]}` : ps[0] ?? "");
 
-  async function save(e: React.FormEvent) {
+  // The box clears the moment a line is saved, before the save finishes, so the next line can be typed straight away
+  // without losing letters or being glued to the last one. Saves run one after another; a failed save puts its line back
+  // (unless something new has been typed meanwhile).
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const textNow = useRef(text);
+  useEffect(() => { textNow.current = text; }, [text]);
+  function submit(job: () => Promise<void>) {
+    const back = { text, cat, date, method, monthly, account };
+    reset();
+    queue.current = queue.current.then(job).catch(err => {
+      console.error("save failed", err);
+      if (textNow.current) return;
+      setText(back.text); setCat(back.cat); setDate(back.date); setMethod(back.method); setMonthly(back.monthly); setAccount(back.account); setTried(true);
+    });
+  }
+
+  function save(e: React.FormEvent) {
     e.preventDefault();
     if (debt) {
       if (!debt.ok) { setTried(true); input.current?.focus(); return; }
-      setSaving(true);
-      try { await onDebt({ ...debt.value, date: date ?? debt.value.date }); reset(); } finally { setSaving(false); }
+      const d = { ...debt.value, date: date ?? debt.value.date };
+      submit(() => onDebt(d));
       return;
     }
     if (!value) { setTried(true); input.current?.focus(); return; }
-    setSaving(true);
     const picked = cat !== null && parsed.ok && cat !== parsed.value.category;
     const sp = split ? { people: split.people, ways: split.ways, eachPaise: split.each, totalPaise: value.amountPaise } : undefined;
-    try { await onAdd(sp ? { ...value, amountPaise: split!.yours } : value, picked, monthly && !sp, account, sp); reset(); } finally { setSaving(false); }
+    const entry = sp ? { ...value, amountPaise: split!.yours } : value;
+    const repeat = monthly && !sp, acc = account;
+    submit(() => onAdd(entry, picked, repeat, acc, sp));
   }
   function reset() { setText(""); setCat(null); setDate(null); setMethod(undefined); setMonthly(false); setAccount(undefined); setTried(false); input.current?.focus(); }
   const shownAccount = value ? (account !== undefined ? account : value.method === "upi" ? settings.upiAccount : value.method === "cash" ? settings.cashAccount : null) : null;
@@ -140,7 +156,7 @@ export const AddBox = forwardRef<AddBoxHandle, {
             placeholder={t.add.placeholder} autoComplete="off" spellCheck={false} enterKeyHint="done"
             aria-invalid={error ? true : undefined} aria-describedby="entry-help"
             className="field min-w-0 flex-1 text-[17px]" />
-          <button type="submit" disabled={saving} className="press min-h-12 shrink-0 rounded-xl bg-accent px-5 text-[16px] font-semibold text-accent-fg disabled:opacity-60">
+          <button type="submit" className="press min-h-12 shrink-0 rounded-xl bg-accent px-5 text-[16px] font-semibold text-accent-fg">
             {t.save}
           </button>
         </div>

@@ -581,7 +581,7 @@ export function App() {
           {TABS.map(k => (
             <li key={k}>
               <button type="button" onClick={() => go(k)} aria-current={tab === k ? "page" : undefined} data-tab={k}
-                className="press flex min-h-16 w-full flex-col items-center justify-center gap-0.5 px-1 text-[12px] leading-[1.45] font-semibold text-muted aria-[current=page]:text-accent">
+                className="press flex min-h-16 w-full flex-col items-center justify-center gap-0.5 px-0.5 text-[11px] leading-[1.45] font-semibold text-muted min-[360px]:text-[12px] aria-[current=page]:text-accent">
                 <Svg>{Icon[k]}</Svg>
                 <span className="max-w-full truncate pb-px">{t.nav[k]}</span>
               </button>

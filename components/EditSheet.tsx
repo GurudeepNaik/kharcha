@@ -181,7 +181,8 @@ function Form({ e, planName, now, onClose, onSave, onDelete, onSkip, accounts, o
           className="press mt-4 min-h-12 w-full rounded-xl border border-line font-semibold">{t.edit.skipThis}</button>
       )}
 
-      <div className="mt-5 flex gap-2">
+      {/* Save and Delete stay in reach while the long category list scrolls. */}
+      <div className="sticky -bottom-[max(1rem,env(safe-area-inset-bottom))] z-10 -mx-4 mt-5 flex gap-2 border-t border-line bg-card px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <button type="button" onClick={() => void onDelete(e)} className="press min-h-12 rounded-xl border border-line px-4 font-semibold text-bad">{t.delete}</button>
         <button type="submit" className="press min-h-12 flex-1 rounded-xl bg-accent font-semibold text-accent-fg">{t.edit.save}</button>
       </div>
