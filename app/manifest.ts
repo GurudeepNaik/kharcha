@@ -16,8 +16,9 @@ export default function manifest(): MetadataRoute.Manifest {
       action: "/share-target", method: "POST", enctype: "multipart/form-data",
       params: { title: "title", text: "text", url: "url", files: [{ name: "receipt", accept: ["image/*"] }] },
     },
-    // Long-press the app icon for these.
+    // Long-press the app icon for these. Android shows the first 3 or so, so the most used come first.
     shortcuts: [
+      { name: "Scan & pay", short_name: "Scan & pay", url: "/?scan=1", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }] },
       { name: "Add a spend", short_name: "Add", url: "/?add=1", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }] },
       { name: "This month", short_name: "Month", url: "/#month", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }] },
       { name: "People", short_name: "People", url: "/#people", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }] },

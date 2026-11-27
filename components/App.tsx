@@ -69,7 +69,7 @@ export function App() {
   const quietFocus = useRef(false);
   const toastId = useRef(0);
   const addBox = useRef<AddBoxHandle>(null);
-  const pending = useRef<{ fill?: string; focus?: boolean; inbox?: boolean; lost?: boolean } | null>(null);
+  const pending = useRef<{ fill?: string; focus?: boolean; scan?: boolean; inbox?: boolean; lost?: boolean } | null>(null);
   const [receipt, setReceipt] = useState<{ url: string; status: "reading" | "done" | "failed"; blob: Blob; keep: boolean } | null>(null);
 
   const i18n: I18n = useMemo(() => ({
@@ -93,6 +93,7 @@ export function App() {
       const line = sharedToLine(q.get("title") ?? "", q.get("text") ?? "", q.get("url") ?? "");
       if (line) pending.current = { fill: line };
     } else if (q.get("add") === "1") pending.current = { focus: true };
+    else if (q.get("scan") === "1") pending.current = { scan: true };
     if (location.search) history.replaceState(null, "", location.pathname + location.hash);
     setTab(pending.current ? "home" : tabFromHash());
 
@@ -198,14 +199,30 @@ export function App() {
   }, []);
 
   // Shared text / shortcut: once the add box exists, fill or focus it.
+  // Waits for the lock screen too, so a shortcut opened while locked still works once unlocked.
   useEffect(() => {
-    if (!loaded || !pending.current) return;
+    if (!ready || !pending.current) return;
     const p = pending.current; pending.current = null;
     if (p.inbox) { void openInbox(); return; }
     if (p.lost) { say(MESSAGES[initialLang()].receipt.lost); return; }
-    setTimeout(() => { if (p.fill) addBox.current?.fill(p.fill); else if (p.focus) addBox.current?.focus(); }, 0);
+    setTimeout(() => { if (p.fill) addBox.current?.fill(p.fill); else if (p.scan) addBox.current?.scan(); else if (p.focus) addBox.current?.focus(); }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded]);
+  }, [ready]);
+
+  // Scan & pay: the toast from saving is long gone by the time the person is back from the UPI app, so say it again
+  // on return, with the undo, in case the payment didn't go through.
+  const paid = useRef<{ e: Expense; to: string; at: number } | null>(null);
+  useEffect(() => {
+    const v = () => {
+      const p = paid.current;
+      if (document.visibilityState !== "visible" || !p) return;
+      paid.current = null;
+      if (Date.now() - p.at > 15 * 60_000) return;
+      say(t.scan.back(rupees(p.e.amountPaise), p.to), () => void remove(p.e, true));
+    };
+    document.addEventListener("visibilitychange", v);
+    return () => document.removeEventListener("visibilitychange", v);
+  });
 
   /** A payment shared from another app: text is read straight away; a receipt image is read on the phone. */
   async function openInbox() {
@@ -301,7 +318,7 @@ export function App() {
     return spent > budget ? ` ${t.toast.overBudget(t.cat[e.category], spent - budget)}` : "";
   }
 
-  async function add(p: Parsed, picked: boolean, everyMonth: boolean, accountId?: string | null, split?: SplitInput) {
+  async function add(p: Parsed, picked: boolean, everyMonth: boolean, accountId?: string | null, split?: SplitInput, paidTo?: string) {
     const at = new Date().toISOString();
     let e: Expense = { id: newId(), ...p, createdAt: at, updatedAt: at };
     // Account: the one picked, else the default for UPI or cash payments.
@@ -324,6 +341,7 @@ export function App() {
     if (!persisted) void keepData().then(setPersisted);
     closeReceipt();
     const inc = isIncomeCategory(e.category);
+    if (paidTo) paid.current = { e, to: paidTo, at: Date.now() };
     const extra = `${e.date !== now ? ` · ${dayText(e.date, now, i18n)}` : ""}${everyMonth ? t.toast.monthly : ""}`;
     if (split) {
       const ps = split.people, nm = ps.length > 1 ? `${ps.slice(0, -1).join(", ")} ${t.split.and} ${ps[ps.length - 1]}` : ps[0] ?? "";

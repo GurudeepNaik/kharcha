@@ -46,6 +46,14 @@ const en = {
     category: "Category", date: "Date", paidBy: "Paid by", spent: "Spent", in: "Money in", invest: "Invest & insure",
     gave: (p: string) => `You gave ${p}`, got: (p: string) => `${p} gave you`, toPeople: "Saved under People, not in spending",
   },
+  scan: {
+    open: "Scan a QR to pay", title: "Scan the shop's QR", help: "Point the camera at the UPI QR code.",
+    photo: "Pick a photo of the QR instead", noCamera: "Couldn't open the camera. Allow camera access, or pick a photo of the QR.",
+    notUpi: "That QR isn't a UPI payment code.", noneInPhoto: "No QR code found in that photo.",
+    paying: (name: string) => `Paying ${name}`, pay: "Pay", payAmt: (amt: string) => `Pay ${amt}`, cancel: "Stop paying",
+    hint: "Type the amount. Add what it was for if you like, like milk 60.",
+    back: (amt: string, name: string) => `Saved ${amt} to ${name}. If the payment didn't go through, undo it.`,
+  },
   err: {
     empty: "Type what you spent, like chai 20.", badDate: "That date doesn't exist. Write it as day/month, like 10/11.",
     futureDate: "That date is in the future. Entries can only be for today or earlier.", noAmount: "Add the amount, like chai 20.",
@@ -292,6 +300,14 @@ const hi: Msg = {
     category: "श्रेणी", date: "तारीख", paidBy: "भुगतान", spent: "खर्च", in: "आमदनी", invest: "निवेश और बीमा",
     gave: p => `आपने ${p} को दिए`, got: p => `${p} ने आपको दिए`, toPeople: "‘लोग’ में सेव होगा, खर्च में नहीं",
   },
+  scan: {
+    open: "पेमेंट के लिए QR स्कैन करें", title: "दुकान का QR स्कैन करें", help: "कैमरा UPI QR कोड पर रखें।",
+    photo: "इसके बजाय QR की फ़ोटो चुनें", noCamera: "कैमरा नहीं खुला। कैमरा की अनुमति दें, या QR की फ़ोटो चुनें।",
+    notUpi: "यह UPI पेमेंट का QR नहीं है।", noneInPhoto: "इस फ़ोटो में कोई QR कोड नहीं मिला।",
+    paying: (name: string) => `${name} को पेमेंट`, pay: "पे करें", payAmt: (amt: string) => `${amt} पे करें`, cancel: "पेमेंट रोकें",
+    hint: "रकम लिखें। चाहें तो किस चीज़ के लिए भी, जैसे दूध 60।",
+    back: (amt: string, name: string) => `${name} को ${amt} सेव हो गया। अगर पेमेंट नहीं हुआ, तो वापस लें।`,
+  },
   err: {
     empty: "क्या खर्च किया लिखें, जैसे chai 20।", badDate: "यह तारीख नहीं होती। दिन/महीना लिखें, जैसे 10/11।",
     futureDate: "यह तारीख आगे की है। सिर्फ़ आज या पहले की एंट्री हो सकती है।", noAmount: "रकम लिखें, जैसे chai 20।",
@@ -535,6 +551,14 @@ const kn: Msg = {
     hint: "ಮೊತ್ತ ಮತ್ತು ಯಾವುದಕ್ಕೆ, ಯಾವ ಕ್ರಮದಲ್ಲಾದರೂ. “yesterday” ಅಥವಾ 10/11, “upi” ಅಥವಾ “cash” ಸೇರಿಸಬಹುದು. ಆದಾಯಕ್ಕೆ ಮುಂದೆ + ಹಾಕಿ, “lent ravi 500”, ಅಥವಾ ಬಿಲ್ ಹಂಚಲು “dinner 900 split ravi asha”.",
     category: "ವರ್ಗ", date: "ದಿನಾಂಕ", paidBy: "ಪಾವತಿ", spent: "ಖರ್ಚು", in: "ಆದಾಯ", invest: "ಹೂಡಿಕೆ ಮತ್ತು ವಿಮೆ",
     gave: p => `ನೀವು ${p} ಗೆ ಕೊಟ್ಟಿದ್ದು`, got: p => `${p} ನಿಮಗೆ ಕೊಟ್ಟಿದ್ದು`, toPeople: "‘ಜನರು’ ಅಡಿಯಲ್ಲಿ ಉಳಿಸಲಾಗುತ್ತದೆ, ಖರ್ಚಿನಲ್ಲಿ ಅಲ್ಲ",
+  },
+  scan: {
+    open: "ಪಾವತಿಸಲು QR ಸ್ಕ್ಯಾನ್ ಮಾಡಿ", title: "ಅಂಗಡಿಯ QR ಸ್ಕ್ಯಾನ್ ಮಾಡಿ", help: "ಕ್ಯಾಮೆರಾವನ್ನು UPI QR ಕೋಡ್ ಕಡೆ ಹಿಡಿಯಿರಿ.",
+    photo: "ಬದಲಿಗೆ QR ಫೋಟೋ ಆಯ್ಕೆಮಾಡಿ", noCamera: "ಕ್ಯಾಮೆರಾ ತೆರೆಯಲಾಗಲಿಲ್ಲ. ಕ್ಯಾಮೆರಾ ಅನುಮತಿ ನೀಡಿ, ಅಥವಾ QR ಫೋಟೋ ಆಯ್ಕೆಮಾಡಿ.",
+    notUpi: "ಇದು UPI ಪಾವತಿ QR ಅಲ್ಲ.", noneInPhoto: "ಈ ಫೋಟೋದಲ್ಲಿ QR ಕೋಡ್ ಸಿಗಲಿಲ್ಲ.",
+    paying: (name: string) => `${name} ಗೆ ಪಾವತಿ`, pay: "ಪಾವತಿಸಿ", payAmt: (amt: string) => `${amt} ಪಾವತಿಸಿ`, cancel: "ಪಾವತಿ ನಿಲ್ಲಿಸಿ",
+    hint: "ಮೊತ್ತ ಬರೆಯಿರಿ. ಬೇಕಿದ್ದರೆ ಯಾವುದಕ್ಕೆ ಎಂದೂ, ಉದಾ. ಹಾಲು 60.",
+    back: (amt: string, name: string) => `${name} ಗೆ ${amt} ಉಳಿಸಲಾಗಿದೆ. ಪಾವತಿ ಆಗದಿದ್ದರೆ, ರದ್ದುಮಾಡಿ.`,
   },
   err: {
     empty: "ಏನು ಖರ್ಚು ಮಾಡಿದಿರಿ ಬರೆಯಿರಿ, ಉದಾ. chai 20.", badDate: "ಈ ದಿನಾಂಕ ಇಲ್ಲ. ದಿನ/ತಿಂಗಳು ಎಂದು ಬರೆಯಿರಿ, ಉದಾ. 10/11.",

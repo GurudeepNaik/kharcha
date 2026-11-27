@@ -2,7 +2,7 @@
 
 // The add box, docked at the bottom of Home within thumb reach: "chai 20", "salary 50000", "lent ravi 500".
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { CATEGORIES, isIncomeCategory, type Category } from "@/lib/categories";
+import { CATEGORIES, guessCategory, isIncomeCategory, type Category } from "@/lib/categories";
 import { parseDebt, type Direction } from "@/lib/debts";
 import { useI18n } from "@/lib/i18n";
 import { rupees } from "@/lib/money";
@@ -10,11 +10,13 @@ import { parseEntry, type Method, type Parsed } from "@/lib/parse";
 import { kindOf } from "@/lib/categories";
 import { shares, splitWords } from "@/lib/split";
 import type { Settings } from "@/lib/types";
+import { payLink, payeeNote, type UpiPayee } from "@/lib/upi";
 import type { Account } from "@/lib/wealth";
+import { ScanSheet, canScan } from "./ScanSheet";
 
 export interface DebtInput { person: string; dir: Direction; amountPaise: number; date: string }
 export interface SplitInput { people: string[]; ways: number; eachPaise: number; totalPaise: number }
-export interface AddBoxHandle { fill: (text: string) => void; focus: () => void }
+export interface AddBoxHandle { fill: (text: string) => void; focus: () => void; scan: () => void }
 
 export const AddBox = forwardRef<AddBoxHandle, {
   now: string;
@@ -22,7 +24,8 @@ export const AddBox = forwardRef<AddBoxHandle, {
   typing: boolean;
   accounts: Account[];
   settings: Settings;
-  onAdd: (p: Parsed, pickedCategory: boolean, everyMonth: boolean, accountId?: string | null, split?: SplitInput) => Promise<void>;
+  /** paidTo: the shop paid by Scan & pay, so coming back from the UPI app can offer an undo. */
+  onAdd: (p: Parsed, pickedCategory: boolean, everyMonth: boolean, accountId?: string | null, split?: SplitInput, paidTo?: string) => Promise<void>;
   onDebt: (d: DebtInput) => Promise<void>;
 }>(function AddBox({ now, learned, typing, accounts, settings, onAdd, onDebt }, ref) {
   const { t } = useI18n();
@@ -34,17 +37,32 @@ export const AddBox = forwardRef<AddBoxHandle, {
   const [account, setAccount] = useState<string | null | undefined>(undefined); // undefined: the default for UPI / cash
   const [tried, setTried] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  // Scan & pay: the shop from the QR. While set, the box takes the amount and Save becomes Pay.
+  const [payTo, setPayTo] = useState<UpiPayee | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanner, setScanner] = useState(false);
+  useEffect(() => { void canScan().then(setScanner); }, []);
+  function found(p: UpiPayee) {
+    setScanOpen(false); setPayTo(p); setMethod("upi"); setCat(null); setTried(false);
+    const s = p.amountPaise ? (p.amountPaise % 100 ? (p.amountPaise / 100).toFixed(2) : String(p.amountPaise / 100)) : "";
+    setText(s);
+    setTimeout(() => { input.current?.focus(); input.current?.setSelectionRange(s.length, s.length); }, 50);
+  }
 
   useImperativeHandle(ref, () => ({
     fill: (s: string) => { setText(s); setTried(false); setTimeout(() => { input.current?.focus(); input.current?.setSelectionRange(s.length, s.length); }, 50); },
     focus: () => input.current?.focus(),
+    scan: () => setScanOpen(true),
   }), []);
 
   const sw = useMemo(() => splitWords(text), [text]);
   const debt = useMemo(() => (sw ? null : parseDebt(text, now)), [sw, text, now]);
   const parsed = useMemo(() => parseEntry(sw ? sw.rest : text, now, learned), [sw, text, now, learned]);
+  // Paying a shop: just an amount is enough; the shop's name is the note and picks the category.
+  const payNote = payTo && parsed.ok && !parsed.value.note ? payeeNote(payTo) : null;
+  const guessed = parsed.ok ? (payNote ? guessCategory(payNote, learned) : parsed.value.category) : null;
   const value: Parsed | null = !debt && parsed.ok
-    ? { ...parsed.value, category: cat ?? parsed.value.category, date: date ?? parsed.value.date, method: method !== undefined ? method : parsed.value.method }
+    ? { ...parsed.value, note: payNote ?? parsed.value.note, category: cat ?? guessed!, date: date ?? parsed.value.date, method: method !== undefined ? method : parsed.value.method }
     : null;
   const income = value ? isIncomeCategory(value.category) : false;
   // A bill split only applies to a spend (not money in or an investment).
@@ -76,13 +94,20 @@ export const AddBox = forwardRef<AddBoxHandle, {
       return;
     }
     if (!value) { setTried(true); input.current?.focus(); return; }
-    const picked = cat !== null && parsed.ok && cat !== parsed.value.category;
+    const picked = cat !== null && parsed.ok && cat !== guessed;
     const sp = split ? { people: split.people, ways: split.ways, eachPaise: split.each, totalPaise: value.amountPaise } : undefined;
     const entry = sp ? { ...value, amountPaise: split!.yours } : value;
     const repeat = monthly && !sp, acc = account;
+    if (payTo) {
+      // Save first, then hand over to the UPI app with the full amount filled in.
+      const link = payLink(payTo, value.amountPaise), to = payTo.name ? payeeNote(payTo) : payTo.pa;
+      submit(() => onAdd({ ...entry, method: "upi" }, picked, false, acc, sp, to));
+      location.href = link;
+      return;
+    }
     submit(() => onAdd(entry, picked, repeat, acc, sp));
   }
-  function reset() { setText(""); setCat(null); setDate(null); setMethod(undefined); setMonthly(false); setAccount(undefined); setTried(false); input.current?.focus(); }
+  function reset() { setPayTo(null); setText(""); setCat(null); setDate(null); setMethod(undefined); setMonthly(false); setAccount(undefined); setTried(false); input.current?.focus(); }
   const shownAccount = value ? (account !== undefined ? account : value.method === "upi" ? settings.upiAccount : value.method === "cash" ? settings.cashAccount : null) : null;
 
   const error = tried
@@ -99,6 +124,12 @@ export const AddBox = forwardRef<AddBoxHandle, {
   return (
     <form onSubmit={save} noValidate data-typing={typing} className="dock fixed inset-x-0 z-30">
       <div className="mx-auto max-w-xl rounded-t-2xl border border-b-0 border-line bg-card px-3 pt-2.5 pb-3 shadow-[0_-6px_24px_rgb(0_0_0/0.08)]">
+        {payTo && (
+          <div className="mb-1.5 flex items-center gap-2 px-1" data-testid="paying">
+            <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-accent">{t.scan.paying(payTo.name ? payeeNote(payTo) : payTo.pa)}</span>
+            <button type="button" onClick={() => { setPayTo(null); setText(""); setMethod(undefined); input.current?.focus(); }} className="press min-h-9 rounded-full border border-line px-3 text-[14px] font-medium" data-testid="paying-cancel">{t.scan.cancel}</button>
+          </div>
+        )}
         <div id="entry-help" className="mb-2 px-1" aria-live="polite">
           {debt?.ok ? (
             <div className="flex flex-wrap items-center gap-1.5" data-testid="debt-preview">
@@ -126,7 +157,7 @@ export const AddBox = forwardRef<AddBoxHandle, {
                   {m === "upi" ? t.upi : t.cash}
                 </button>
               ))}
-              {!split && <button type="button" aria-pressed={monthly} onClick={() => setMonthly(v => !v)} className={pill}>{t.everyMonth}</button>}
+              {!split && !payTo && <button type="button" aria-pressed={monthly} onClick={() => setMonthly(v => !v)} className={pill}>{t.everyMonth}</button>}
               {accounts.length > 0 && (
                 <label className="chip">
                   <span className="sr-only">{t.wealth.account}</span>
@@ -144,6 +175,8 @@ export const AddBox = forwardRef<AddBoxHandle, {
             </div>
           ) : error ? (
             <p className="text-[14px] font-medium text-bad" role="alert">{error}</p>
+          ) : payTo ? (
+            <p className="text-[13px] leading-snug text-muted">{t.scan.hint}</p>
           ) : typing && !text ? (
             <p className="text-[13px] leading-snug text-muted">{t.add.hint}</p>
           ) : (
@@ -151,16 +184,25 @@ export const AddBox = forwardRef<AddBoxHandle, {
           )}
         </div>
         <div className="flex gap-2">
-          {debt || value || error || (typing && !text) ? <label htmlFor="entry" className="sr-only">{t.add.label}</label> : null}
+          {debt || value || error || payTo || (typing && !text) ? <label htmlFor="entry" className="sr-only">{t.add.label}</label> : null}
+          {scanner && !payTo && (
+            <button type="button" onClick={() => setScanOpen(true)} aria-label={t.scan.open} title={t.scan.open} data-testid="scan-open"
+              className="press grid min-h-12 w-12 shrink-0 place-items-center rounded-xl border border-line bg-soft text-fg">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" /><rect x="8" y="8" width="8" height="8" rx="1" />
+              </svg>
+            </button>
+          )}
           <input ref={input} id="entry" value={text} onChange={e => { setText(e.target.value); setTried(false); }}
-            placeholder={t.add.placeholder} autoComplete="off" spellCheck={false} enterKeyHint="done"
+            placeholder={payTo ? "₹" : t.add.placeholder} autoComplete="off" spellCheck={false} enterKeyHint="done"
             aria-invalid={error ? true : undefined} aria-describedby="entry-help"
             className="field min-w-0 flex-1 text-[17px]" />
           <button type="submit" className="press min-h-12 shrink-0 rounded-xl bg-accent px-5 text-[16px] font-semibold text-accent-fg">
-            {t.save}
+            {payTo ? (value ? t.scan.payAmt(rupees(value.amountPaise)) : t.scan.pay) : t.save}
           </button>
         </div>
       </div>
+      <ScanSheet open={scanOpen} onClose={() => { setScanOpen(false); input.current?.focus(); }} onFound={found} />
     </form>
   );
 });
